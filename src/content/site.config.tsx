@@ -18,6 +18,11 @@ export const site = {
   },
 
   // S5: data posture — declared in aismith-site-charter.md as "no-db, static-in-repo"
+
+  // verify.mjs [6] LOGO — brand mark KIND, gated by the audit. Default "image" forces the
+  // real extracted mark; a text wordmark is legal ONLY when declared. AI Smith's mark is
+  // genuinely typographic, so the reference declares it. Client sites omit (default "image").
+  brandMark: { kind: "wordmark" },
 };
 
 // Demo = true (public but not crawlable; shareable for feedback). Production = false.

@@ -318,8 +318,97 @@ if (CHARTER && existsSync(CHARTER)) {
   (CI ? bad : soft)(`no --charter supplied; charter<->repo reconciliation skipped` + (CI ? " (failing closed in CI)" : ""));
 }
 
-// == 6. SSR -- HONEST NOTE (auditor hardening; the residual production gate, E.e) ==
-out.push("\n[6] SSR VIEW-SOURCE -- out of scope for this static gate");
+// == 6. LOGO ASSET -- the real extracted mark, never a text-only wordmark fallback ==
+// Closes the long-standing enforcement gap: intake S6 / build-agent S6.5 require the
+// logo to be the REAL mark extracted from the live site (an image asset), never a
+// text-only wordmark stand-in -- but until now this was build-discipline + audit only,
+// so cafekamiel and planttrekkerij both shipped a text wordmark past a green gate.
+// Mechanism (declare-then-enforce, like the sitemap<->host and charter<->repo checks):
+// site.config declares brandMark { kind: "image" | "wordmark" }. DEFAULT = "image", so
+// a SILENT text fallback fails closed; a wordmark is legal ONLY when explicitly declared
+// (the AS reference instance is a genuine typographic mark and declares kind:"wordmark").
+out.push("\n[6] LOGO -- real image mark by default; text wordmark only if explicitly declared");
+// (a) resolve the declared brand-mark kind from site.config (default image).
+let markKind = "image", markSrc = null;
+if (cfg) {
+  const bm = cfg.match(/brandMark\s*:\s*\{([\s\S]*?)\}/);
+  if (bm) {
+    const k = bm[1].match(/kind\s*:\s*["'`](image|wordmark)["'`]/);
+    if (k) markKind = k[1];
+    const s = bm[1].match(/src\s*:\s*["'`]([^"'`]+)["'`]/);
+    if (s) markSrc = s[1];
+  }
+}
+// (b) resolve the logo NODE: the JSX passed to SiteHeader/SiteFooter as logo={...}.
+//     It may be inline JSX or an identifier defined (const X = ...) in __root or site.config.
+function braced(src, openIdx) { // openIdx points at the '{' after logo=
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") { depth--; if (depth === 0) return src.slice(openIdx + 1, i); }
+  }
+  return null;
+}
+function resolveLogoNode() {
+  for (const src of [rootSrc, cfg]) {
+    if (!src) continue;
+    const m = src.match(/logo\s*=\s*\{/);
+    if (!m) continue;
+    const inner = (braced(src, m.index + m[0].length - 1) || "").trim();
+    if (!inner) continue;
+    if (/^[A-Za-z_$][\w$]*$/.test(inner)) {
+      // identifier -> find its definition in __root or site.config
+      for (const s2 of [rootSrc, cfg]) {
+        if (!s2) continue;
+        const def = s2.match(new RegExp("const\\s+" + inner + "\\s*=\\s*([\\s\\S]*?);", ""));
+        if (def) return { node: def[1], src: s2, via: inner };
+      }
+      return { node: inner, src, via: inner, unresolved: true };
+    }
+    return { node: inner, src, via: "inline" };
+  }
+  return null;
+}
+const logoRef = resolveLogoNode();
+// (c) classify image vs text-only.
+const VECTOR = /<(path|polygon|polyline|circle|ellipse|rect|line|image|use)\b/i;
+function isImageNode(node, srcText) {
+  if (/<img\b/i.test(node)) return true;
+  if (/<svg\b/i.test(node) && VECTOR.test(node)) return true;
+  // imported asset referenced by the node (import x from "...png|svg|webp|...")
+  const ids = [...node.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].map((m) => m[1]);
+  for (const id of ids) {
+    const imp = (srcText || "").match(new RegExp("import\\s+" + id + "\\s+from\\s+[\"'`][^\"'`]+\\.(svg|png|webp|jpe?g|avif|gif)[\"'`]", "i"));
+    if (imp) return true;
+  }
+  return false;
+}
+// (d) enforce.
+if (!logoRef) {
+  (CI ? bad : soft)("logo node not found (no logo={...} on SiteHeader/SiteFooter); cannot prove a real image mark");
+} else {
+  const img = isImageNode(logoRef.node, logoRef.src);
+  if (markKind === "wordmark") {
+    if (img) ok("brandMark declared 'wordmark' and the logo carries an image mark (over-delivers; ok)");
+    else ok(`brandMark explicitly declared 'wordmark' -- text mark sanctioned (genuine typographic brand; ${logoRef.via})`);
+  } else { // image (default, incl. undeclared)
+    if (img) ok(`logo resolves to a real image mark (${logoRef.via})`);
+    else bad(`logo is a TEXT-ONLY wordmark (${logoRef.via}) but brandMark.kind is '${markKind}'` +
+      (cfg && /brandMark/.test(cfg) ? "" : " (defaulted -- not declared)") +
+      `: the real extracted mark must be an image asset (intake S6 / build-agent S6.5). ` +
+      `Extract the live-site mark, or declare brandMark.kind='wordmark' ONLY if the brand is genuinely typographic.`);
+  }
+  // (e) if an image src is declared as a public path, the asset must exist.
+  if (markKind === "image" && markSrc && markSrc.startsWith("/")) {
+    existsSync(join(ROOT, "public", markSrc.replace(/^\//, "")))
+      ? ok(`declared logo asset present (public${markSrc})`)
+      : bad(`brandMark.src '${markSrc}' declared but public${markSrc} is missing`);
+  }
+}
+
+
+// == 7. SSR -- HONEST NOTE (auditor hardening; the residual production gate, E.e) ==
+out.push("\n[7] SSR VIEW-SOURCE -- out of scope for this static gate");
 note("This gate does NOT prove SSR. The residual production gate is one green `vite build`");
 note("plus a view-source by a NON-builder (or CI) confirming rendered copy in the HTML, not");
 note("an empty root div (as-site-build-agent.md Section 6.4). Run before PRODUCTION promotion.");
