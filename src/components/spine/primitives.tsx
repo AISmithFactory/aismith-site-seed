@@ -4,26 +4,64 @@ import * as React from "react";
 
 type Tone = "paper" | "alt" | "surface" | "dark" | "slate" | "accent";
 
-export function Wrap({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div className="wrap" style={style}>{children}</div>;
+export function Wrap({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div className="wrap" style={style}>
+      {children}
+    </div>
+  );
 }
 
 /** Section — the alternating-banner unit (S4). `tone` maps to tokens in tokens.css. */
-export function Section(
-  { tone = "paper", pad, id, className = "", children }:
-  { tone?: Tone; pad?: "sm" | "lg"; id?: string; className?: string; children: React.ReactNode }
-) {
+export function Section({
+  tone = "paper",
+  pad,
+  id,
+  className = "",
+  children,
+}: {
+  tone?: Tone;
+  pad?: "sm" | "lg";
+  id?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
   const cls = ["section", pad ? `pad-${pad}` : "", className].filter(Boolean).join(" ");
-  return <section id={id} data-tone={tone} className={cls}><Wrap>{children}</Wrap></section>;
+  return (
+    <section id={id} data-tone={tone} className={cls}>
+      <Wrap>{children}</Wrap>
+    </section>
+  );
 }
 
-/** Band — full-width CTA (replaces ZG .cta/.steun). Defaults to a dark tone. */
-export function Band(
-  { tone = "dark", heading, sub, actions, id }:
-  { tone?: Tone; heading: React.ReactNode; sub?: React.ReactNode; actions?: React.ReactNode; id?: string }
-) {
+/** Band — full-width CTA (replaces ZG .cta/.steun). Defaults to a dark tone.
+    `ambient` (additive) layers per-skin quiet motion behind the band: embers for
+    forge/original (and the no-skin default), a node network for engine, a dotted grid
+    for blueprint. Markup ships all three; spine.css gates visibility by [data-skin]. */
+export function Band({
+  tone = "dark",
+  heading,
+  sub,
+  actions,
+  id,
+  ambient = false,
+}: {
+  tone?: Tone;
+  heading: React.ReactNode;
+  sub?: React.ReactNode;
+  actions?: React.ReactNode;
+  id?: string;
+  ambient?: boolean;
+}) {
   return (
-    <section id={id} data-tone={tone} className="band">
+    <section id={id} data-tone={tone} className={ambient ? "band band--fx" : "band"}>
+      {ambient && <BandAmbient />}
       <Wrap>
         <div>
           <h2>{heading}</h2>
@@ -35,12 +73,161 @@ export function Band(
   );
 }
 
-export function Display({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
-  return <span className={`display ${className}`} style={style}>{children}</span>;
+const bandEmbers: [number, number, number, number, number][] = [
+  [6, 8, 5, 4.2, 0],
+  [14, 0, 3, 5.1, 0.8],
+  [22, 12, 6, 4.7, 1.6],
+  [31, 2, 4, 5.6, 0.3],
+  [39, 16, 3, 4.4, 2.1],
+  [47, 4, 5, 5.3, 1.1],
+  [55, 10, 4, 4.9, 0.6],
+  [63, 1, 6, 5.8, 1.9],
+  [71, 14, 3, 4.3, 0.4],
+  [79, 5, 5, 5.4, 1.4],
+  [87, 11, 4, 4.6, 2.3],
+  [93, 3, 3, 5.0, 0.9],
+];
+const bandNodeLines: [number, number, number, number][] = [
+  [70, 60, 230, 130],
+  [230, 130, 180, 250],
+  [230, 130, 420, 80],
+  [420, 80, 560, 180],
+  [560, 180, 480, 260],
+  [560, 180, 720, 110],
+  [720, 110, 880, 190],
+  [880, 190, 820, 270],
+  [720, 110, 640, 40],
+  [420, 80, 330, 30],
+];
+const bandNodeDots: [number, number, number, number][] = [
+  [70, 60, 3.5, 0],
+  [230, 130, 4.5, 0.4],
+  [420, 80, 4, 0.8],
+  [560, 180, 4.5, 1.2],
+  [720, 110, 4, 0.6],
+  [880, 190, 3.5, 1.6],
+  [180, 250, 3, 1.0],
+  [480, 260, 3, 1.9],
+  [640, 40, 3, 0.2],
+  [330, 30, 3, 1.4],
+];
+function BandAmbient() {
+  return (
+    <>
+      <div
+        className="bandfx bandfx--ember"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          opacity: 0.65,
+          pointerEvents: "none",
+        }}
+      >
+        {bandEmbers.map(([left, bottom, size, dur, delay], i) => (
+          <span
+            key={i}
+            style={{
+              position: "absolute",
+              left: `${left}%`,
+              bottom: `${bottom}%`,
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              background: "var(--accent-on-dark)",
+              boxShadow: `0 0 ${size + 3}px var(--accent-on-dark)`,
+              animation: `sp-emberRise ${dur}s linear infinite ${delay}s`,
+            }}
+          />
+        ))}
+      </div>
+      <div
+        className="bandfx bandfx--node"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          opacity: 0.5,
+          pointerEvents: "none",
+        }}
+      >
+        <svg
+          viewBox="0 0 1000 300"
+          preserveAspectRatio="xMidYMid slice"
+          style={{ width: "100%", height: "100%" }}
+        >
+          <g
+            stroke="var(--accent-on-dark)"
+            strokeWidth="1"
+            strokeDasharray="4 7"
+            fill="none"
+            opacity=".7"
+            style={{ animation: "sp-dashFlow 1.1s linear infinite" }}
+          >
+            {bandNodeLines.map(([x1, y1, x2, y2], i) => (
+              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />
+            ))}
+          </g>
+          <g fill="var(--accent-on-dark)">
+            {bandNodeDots.map(([cx, cy, r, delay], i) => (
+              <circle
+                key={i}
+                cx={cx}
+                cy={cy}
+                r={r}
+                style={{
+                  transformBox: "fill-box",
+                  transformOrigin: "center",
+                  animation: `sp-pulseDot 2.4s ease-in-out infinite ${delay}s`,
+                }}
+              />
+            ))}
+          </g>
+        </svg>
+      </div>
+      <div
+        className="bandfx bandfx--dots"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.4,
+          pointerEvents: "none",
+          backgroundImage: "radial-gradient(var(--accent-on-dark) 1px, transparent 1.4px)",
+          backgroundSize: "22px 22px",
+          backgroundPosition: "center",
+        }}
+      />
+    </>
+  );
+}
+
+export function Display({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span className={`display ${className}`} style={style}>
+      {children}
+    </span>
+  );
 }
 // PageTitle — the hero <h1>. Size comes from a bounded spine scale (hero|xl|lg), not an
 // inline font-size, so a composition never hand-rolls type (S3.2). One h1 per page (S7).
-export function PageTitle({ size = "xl", children }: { size?: "hero" | "xl" | "lg"; children: React.ReactNode }) {
+export function PageTitle({
+  size = "xl",
+  children,
+}: {
+  size?: "hero" | "xl" | "lg";
+  children: React.ReactNode;
+}) {
   return <h1 className={`display page-title s-${size}`}>{children}</h1>;
 }
 export function SecTitle({ children }: { children: React.ReactNode }) {
@@ -57,11 +244,27 @@ export function Em({ children }: { children: React.ReactNode }) {
 }
 
 type BtnVariant = "action" | "line" | "ghost";
-export function Btn(
-  { variant = "action", href, children, onClick }:
-  { variant?: BtnVariant; href?: string; children: React.ReactNode; onClick?: () => void }
-) {
+export function Btn({
+  variant = "action",
+  href,
+  children,
+  onClick,
+}: {
+  variant?: BtnVariant;
+  href?: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
   const cls = variant === "ghost" ? "btn-ghost" : `btn btn-${variant}`;
-  if (href) return <a className={cls} href={href}>{children}</a>;
-  return <button className={cls} onClick={onClick}>{children}</button>;
+  if (href)
+    return (
+      <a className={cls} href={href}>
+        {children}
+      </a>
+    );
+  return (
+    <button className={cls} onClick={onClick}>
+      {children}
+    </button>
+  );
 }
