@@ -1,0 +1,11 @@
+/* spine/modules/hours.css — co-located with hours.tsx (S3.3). Tokens only (S2.2). */
+/* ---- Hours ----*/
+.hours-title { font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(20px, 2.4vw, 26px); margin: 0 0 14px; }
+.hours-list { margin: 0; }
+.hours-row { display: flex; justify-content: space-between; gap: 24px;
+  padding: 9px 0; border-bottom: 1px solid var(--line); }
+.hours-row:last-child { border-bottom: 0; }
+.hours-row dt { font-weight: 600; }
+.hours-row dd { margin: 0; color: var(--sec-soft, var(--text-soft)); white-space: nowrap; }
+.hours-note { margin: 14px 0 0; color: var(--sec-soft, var(--text-soft)); font-size: 14px; }

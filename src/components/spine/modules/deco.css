@@ -1,0 +1,37 @@
+/* spine/modules/deco.css — co-located with deco.tsx (S3.3). Tokens only (S2.2).
+   Decoration never intercepts input and never costs a request at rest. */
+.deco-star { position: absolute; pointer-events: none; color: var(--accent);
+  animation: deco-bob 6s ease-in-out infinite; }
+@keyframes deco-bob {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50% { transform: translateY(-13px) rotate(9deg); } }
+.deco-grain { position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  opacity: .05; mix-blend-mode: multiply; }
+.deco-zz { color: var(--line); pointer-events: none; }
+.deco-zz svg { display: block; }
+.deco-tilt { transform: rotate(var(--tilt, 0deg)); border-radius: var(--radius-lg);
+  overflow: hidden; box-shadow: var(--shadow-lg); }
+.deco-tilt--flip { transform: rotate(calc(var(--tilt, 0deg) * -1.3)); }
+.deco-tilt > img { display: block; width: 100%; }
+.deco-badge { position: absolute; display: flex; align-items: center; justify-content: center;
+  width: 84px; height: 84px; border-radius: 50%; background: var(--surface);
+  box-shadow: var(--shadow); pointer-events: none;
+  clip-path: polygon(50% 0%, 61% 4%, 73% 2%, 81% 10%, 92% 12%, 94% 23%, 100% 32%,
+    97% 43%, 100% 54%, 94% 63%, 94% 74%, 85% 80%, 80% 90%, 69% 91%, 60% 98%,
+    50% 94%, 40% 98%, 31% 91%, 20% 90%, 15% 80%, 6% 74%, 6% 63%, 0% 54%,
+    3% 43%, 0% 32%, 6% 23%, 8% 12%, 19% 10%, 27% 2%, 39% 4%); }
+.deco-badge--lg { width: 120px; height: 120px; }
+.deco-badge--xl { width: 168px; height: 168px; }
+.deco-badge > img, .deco-badge > svg { width: 70%; height: 70%; object-fit: contain; }
+.deco-pill { display: inline-flex; align-items: center; gap: 9px;
+  background: rgba(var(--shadow-color), .08); color: var(--sec-text, var(--text));
+  font-weight: 700; font-size: 13px; padding: 7px 15px 7px 11px;
+  border-radius: var(--radius-pill); }
+.deco-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+  animation: deco-pulse 1.9s ease-in-out infinite; }
+@keyframes deco-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.45); opacity: .5; } }
+@media (prefers-reduced-motion: reduce) {
+  .deco-star, .deco-dot { animation: none; }
+}

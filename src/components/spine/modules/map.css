@@ -1,7 +1,4 @@
-/* spine/modules.css — styles for OPTIONAL modules (S3.3). Co-located with the driver
-   so neither ships unless the module is imported. Tokens only (S2.2): no raw hex, alpha
-   composed over the --shadow-color triplet, never a literal colour. */
-
+/* spine/modules/map.css — co-located with map.tsx (S3.3). Tokens only (S2.2). */
 /* ---- Map (facade) ---------------------------------------------------------*/
 .map { border-radius: var(--radius); overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); }
@@ -25,16 +22,5 @@
 .map-label { font-weight: 700; font-size: clamp(17px, 2vw, 21px); }
 .map-caption { color: var(--sec-soft, var(--text-soft)); font-size: 15px; }
 .map-cta { margin-top: 6px; pointer-events: none; }      /* visual affordance; the wrapper is the button */
-
-/* ---- Hours ----------------------------------------------------------------*/
-.hours-title { font-family: var(--font-display); font-weight: 800;
-  font-size: clamp(20px, 2.4vw, 26px); margin: 0 0 14px; }
-.hours-list { margin: 0; }
-.hours-row { display: flex; justify-content: space-between; gap: 24px;
-  padding: 9px 0; border-bottom: 1px solid var(--line); }
-.hours-row:last-child { border-bottom: 0; }
-.hours-row dt { font-weight: 600; }
-.hours-row dd { margin: 0; color: var(--sec-soft, var(--text-soft)); white-space: nowrap; }
-.hours-note { margin: 14px 0 0; color: var(--sec-soft, var(--text-soft)); font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) { .map-facade { transition: none; } }

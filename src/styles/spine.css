@@ -66,6 +66,22 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 [data-tone="slate"]   { --sec-bg: var(--dark-alt);  --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); }
 [data-tone="accent"]  { --sec-bg: var(--accent);    --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); }
 
+/* ---- S4.6 optional hue slots — secondary-palette sections -----------------
+   A SKIN that declares --hue-N (+ --hue-N-ink, optional --hue-N-soft) in
+   tokens.css re-grounds any [data-hue="N"] section in that hue; undeclared
+   slots fall back to the tone (tone = register, hue = brand family).
+   Every declared --hue-N / --hue-N-ink pair must clear WCAG AA (S2). */
+[data-hue="1"] { --sec-bg: var(--hue-1, var(--sec-bg)); --sec-text: var(--hue-1-ink, var(--sec-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="2"] { --sec-bg: var(--hue-2, var(--sec-bg)); --sec-text: var(--hue-2-ink, var(--sec-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="3"] { --sec-bg: var(--hue-3, var(--sec-bg)); --sec-text: var(--hue-3-ink, var(--sec-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="4"] { --sec-bg: var(--hue-4, var(--sec-bg)); --sec-text: var(--hue-4-ink, var(--sec-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="5"] { --sec-bg: var(--hue-5, var(--sec-bg)); --sec-text: var(--hue-5-ink, var(--sec-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+
+/* ---- Section fx layer (deco module behind content) ------------------------*/
+.section--fx { position: relative; overflow: hidden; }
+.section--fx > .sec-fx { position: absolute; inset: 0; pointer-events: none; }
+.section--fx > .wrap { position: relative; z-index: 2; }
+
 /* ---- buttons --------------------------------------------------------------*/
 .btn { display: inline-flex; align-items: center; gap: 9px; padding: 14px 24px;
   font-family: var(--font-body); font-weight: 700; font-size: 15px;
@@ -138,13 +154,33 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .media-card .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .media-card .body { padding: 18px 22px 22px; }
 .media-card .cat { font-weight: 700; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
+.media-card .art img { transition: transform .3s ease; }
+.media-card:hover .art img { transform: scale(1.05); }
+.media-card .pill { position: absolute; top: 12px; right: 12px; z-index: 2;
+  font-weight: 800; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--surface); color: var(--accent-text);
+  padding: 5px 11px; border-radius: var(--radius-pill); box-shadow: var(--shadow); }
+.media-card .stamp { position: absolute; left: 14px; bottom: -18px; z-index: 2;
+  width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; background: var(--surface-warm); box-shadow: var(--shadow);
+  pointer-events: none; }
+.media-card .stamp > img, .media-card .stamp > svg { width: 62%; height: 62%; object-fit: contain; }
 .media-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin: 6px 0 6px; }
 .media-card p { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.5; margin-bottom: 12px; }
 
 .tier-card { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 13px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
   padding: 30px 24px 26px; box-shadow: var(--shadow); }
-.tier-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--accent); }
+.tier-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--tier-bar, var(--accent)); }
+.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }
+.tier-card[data-hue-bar="2"] { --tier-bar: var(--hue-2, var(--accent)); }
+.tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); }
+.tier-card[data-hue-bar="4"] { --tier-bar: var(--hue-4, var(--accent)); }
+.tier-card[data-hue-bar="5"] { --tier-bar: var(--hue-5, var(--accent)); }
+.tier-card .tier-ico { width: 46px; height: 46px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; background: var(--tier-bar, var(--accent));
+  color: var(--on-dark); }
+.tier-card .tier-ico svg { width: 22px; height: 22px; }
 .tier-card .label { font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
 .tier-card .price { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; }
 .tier-card .price small { display: block; font-family: var(--font-body); font-weight: 500; font-size: 12px; color: var(--text-soft); margin-top: 6px; }
@@ -152,8 +188,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .tier-card li { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.45; padding-left: 22px; position: relative; }
 .tier-card li::before { content: ""; position: absolute; left: 0; top: 7px; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
 
+.event-card.noposter { grid-template-columns: 1fr; }  /* posterless most of the year by design */
 .event-card { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
+  background: var(--card-bg, var(--surface)); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
 .event-card .poster { width: 132px; border-radius: var(--radius); overflow: hidden; }
 .event-card .when { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 8px; }
 .event-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin-bottom: 6px; }

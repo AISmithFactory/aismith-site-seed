@@ -1,0 +1,20 @@
+/* spine/modules/marquee.css — co-located with marquee.tsx (S3.3). Tokens only (S2.2).
+   Full-bleed tilted band on the dark register; tilt from --tilt (0deg disables). */
+.marquee { overflow: hidden; width: 106%; margin-left: -3%; margin-right: -3%;
+  transform: rotate(var(--tilt, 0deg));
+  background: linear-gradient(100deg, var(--action-strong) 0%, var(--action) 55%, var(--accent) 100%);
+  color: var(--on-dark);
+  border-top: 4px solid var(--action-strong); border-bottom: 4px solid var(--action-strong);
+  padding: 16px 0; }
+.mq-track { display: flex; width: max-content; white-space: nowrap;
+  animation: mq var(--mq-dur, 34s) linear infinite; }
+.mq-run { display: flex; }
+.mq-item { display: inline-flex; align-items: center; gap: 22px; padding: 0 22px;
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(18px, 2.2vw, 24px); }
+.mq-star { display: inline-flex; color: var(--accent-on-dark); }
+@keyframes mq { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .mq-track { animation: none; }
+  .mq-run[aria-hidden] { display: none; }   /* static single row */
+  .marquee { transform: none; }
+}

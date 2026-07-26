@@ -18,23 +18,34 @@ export function Wrap({
   );
 }
 
-/** Section — the alternating-banner unit (S4). `tone` maps to tokens in tokens.css. */
+/** Section — the alternating-banner unit (S4). `tone` maps to tokens in tokens.css.
+    `hue` (S4.6, optional): a bounded secondary-palette slot 1-5. Each slot the SKIN
+    declares in tokens.css (--hue-N + --hue-N-ink [+ --hue-N-soft], AA-gated pair)
+    re-grounds the section in that hue; an undeclared slot falls back to the tone —
+    tone = register, hue = brand family. `fx` layers decorative content (the deco
+    module) behind the content; it is aria-hidden and never intercepts input. */
 export function Section({
   tone = "paper",
+  hue,
   pad,
   id,
   className = "",
+  fx,
   children,
 }: {
   tone?: Tone;
+  hue?: 1 | 2 | 3 | 4 | 5;
   pad?: "sm" | "lg";
   id?: string;
   className?: string;
+  fx?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const cls = ["section", pad ? `pad-${pad}` : "", className].filter(Boolean).join(" ");
+  const cls = ["section", pad ? `pad-${pad}` : "", fx ? "section--fx" : "", className]
+    .filter(Boolean).join(" ");
   return (
-    <section id={id} data-tone={tone} className={cls}>
+    <section id={id} data-tone={tone} data-hue={hue} className={cls}>
+      {fx && <div className="sec-fx" aria-hidden="true">{fx}</div>}
       <Wrap>{children}</Wrap>
     </section>
   );

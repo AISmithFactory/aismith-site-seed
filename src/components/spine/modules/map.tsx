@@ -1,9 +1,9 @@
-// spine/modules.tsx — OPTIONAL modules (S3.3). Realised set: Map, Hours.
-// Self-contained: component + driver + co-located CSS (./modules.css). A site that
-// never imports a module bundles neither its JS nor its CSS (no orphaned CSS, S3.3).
-// Reference tokens only (via modules.css classes); no colour decision lives here (S2.2).
+// spine/modules/map.tsx — OPTIONAL module (S3.3): Map (facade, S3.5).
+// Self-contained: component + driver + co-located CSS. Import DIRECTLY from this file
+// ("components/spine/modules/map") — modules are NOT re-exported by the spine barrel,
+// so a site that never imports one bundles neither its JS nor its CSS (S3.3).
 import * as React from "react";
-import "./modules.css";
+import "./map.css";
 
 type LatLng = { lat: number; lng: number };
 
@@ -57,33 +57,6 @@ export function Map(
           </span>
         </button>
       )}
-    </div>
-  );
-}
-
-type HoursRow = { label: string; value: string };
-
-/**
- * Hours — structured opening hours. Static by design: no "open now" computation
- * (timezone/locale correctness is a separate, opt-in enhancement). Each row is a
- * day-or-range label and its time value, e.g. { label: "Ma–Vr", value: "12:00–23:00" }.
- */
-export function Hours(
-  { heading = "Openingsuren", rows, note }:
-  { heading?: string; rows: HoursRow[]; note?: React.ReactNode }
-) {
-  return (
-    <div className="hours">
-      {heading ? <h3 className="hours-title">{heading}</h3> : null}
-      <dl className="hours-list">
-        {rows.map((r, i) => (
-          <div className="hours-row" key={i}>
-            <dt>{r.label}</dt>
-            <dd>{r.value}</dd>
-          </div>
-        ))}
-      </dl>
-      {note ? <p className="hours-note">{note}</p> : null}
     </div>
   );
 }

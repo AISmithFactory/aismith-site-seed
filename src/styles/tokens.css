@@ -53,4 +53,13 @@
   --shadow:     0 18px 40px -26px rgba(var(--shadow-color), .45);
   --shadow-lg:  0 28px 54px -24px rgba(var(--shadow-color), .5);
   --tilt:       -1.2deg;              /* decorative rotation; set 0deg to disable */
+
+  /* ---- OPTIONAL slots (declare only if the brand needs them) --------------
+     Secondary-palette hues (S4.6): up to five --hue-N / --hue-N-ink pairs
+     (+ optional --hue-N-soft). Each declared pair must clear WCAG AA; the
+     Section `hue` prop maps to them, undeclared slots fall back to the tone.
+     AI Smith declares none (single-accent brand). Example (ZG family):
+       --hue-1: #F4C542;  --hue-1-ink: #213847;   (mustard)
+       --hue-2: #EE5FA0;  --hue-2-ink: #FFFFFF;   (rose/magenta)
+     Card background override: --card-bg (EventCard ground; defaults to --surface). */
 }
