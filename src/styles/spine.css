@@ -161,6 +161,19 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .band h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 4vw, 52px); line-height: 1.0; letter-spacing: -.02em; }
 .band p { margin-top: 12px; font-weight: 500; font-size: 16px; max-width: 48ch; line-height: 1.55; color: var(--sec-soft, var(--on-dark-soft)); }
 
+/* Band art layer (#129 follow-up, operator-ruled GRAMMAR 2026-07-30): a brand
+   illustration bleeding in from the right under a scrim in the band's own ground,
+   so the text half stays readable on any tone. The image is a background layer:
+   inherently decorative, no alt surface. URL arrives via --band-art (set by the
+   Band component); the scrim keys to --sec-bg, never a hardcoded dark. */
+.band--art { background:
+    linear-gradient(90deg, var(--sec-bg, var(--dark)) 0%, var(--sec-bg, var(--dark)) 46%,
+      color-mix(in srgb, var(--sec-bg, var(--dark)) 50%, transparent) 66%,
+      color-mix(in srgb, var(--sec-bg, var(--dark)) 8%, transparent) 100%),
+    var(--band-art) right -4% center / auto 86% no-repeat,
+    var(--sec-bg, var(--dark));
+  position: relative; overflow: hidden; }
+
 /* ---- cards ----------------------------------------------------------------*/
 .media-card { display: flex; flex-direction: column; background: var(--card-bg, var(--surface));
   border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg); overflow: hidden;

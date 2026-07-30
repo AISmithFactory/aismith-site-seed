@@ -63,6 +63,7 @@ export function Band({
   actions,
   id,
   ambient = false,
+  art,
 }: {
   tone?: Tone;
   eyebrow?: React.ReactNode;
@@ -71,9 +72,14 @@ export function Band({
   actions?: React.ReactNode;
   id?: string;
   ambient?: boolean;
+  /** Brand illustration bleeding in from the right under a tone-ground scrim
+      (grammar since v0.13.1, #129 follow-up). Background layer: decorative only. */
+  art?: string;
 }) {
+  const cls = ["band", ambient ? "band--fx" : "", art ? "band--art" : ""].filter(Boolean).join(" ");
+  const style = art ? ({ "--band-art": `url("${art}")` } as React.CSSProperties) : undefined;
   return (
-    <section id={id} data-tone={tone} className={ambient ? "band band--fx" : "band"}>
+    <section id={id} data-tone={tone} className={cls} style={style}>
       {ambient && <BandAmbient />}
       <Wrap>
         <div>
