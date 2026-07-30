@@ -1,0 +1,51 @@
+/* spine/modules/tiles.css -- co-located with tiles.tsx (S3.3). Tokens only (S2.2).
+   The tile/chip grammar folded from the ZG conversion harvest (#122 item 3). */
+.tl-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.tl-chip { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line));
+  border-radius: 13px; padding: 8px 14px; }
+.tl-chip-n { display: block; font-family: var(--font-display); font-weight: 800;
+  font-size: 15px; color: var(--action); }
+.tl-chip-r { font-size: 12.5px; color: var(--text-soft); font-weight: 600; }
+.tl-fact { padding: 9px 14px; }
+.tl-fact-k { display: block; font-weight: 800; font-size: 10.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--action-strong); margin-bottom: 1px; }
+.tl-fact-v { font-family: var(--font-display); font-weight: 800; font-size: 16px; color: var(--text); }
+.tl-cell { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line));
+  border-radius: 14px; padding: 15px 16px; }
+.tl-cell-k { font-family: var(--font-display); font-weight: 800; font-size: 16px;
+  color: var(--action); margin-bottom: 5px; }
+.tl-cell-k:only-child { margin-bottom: 0; }
+.tl-cell-b { font-size: 13px; color: var(--text-soft); font-weight: 500; line-height: 1.46; }
+.tl-dcard { border-radius: 20px; padding: 26px; border: 2.5px solid var(--line-card, var(--line));
+  background: var(--card-bg, var(--surface)); }
+.tl-dcard h3 { font-family: var(--font-display); font-weight: 800; font-size: 23px;
+  margin-bottom: 4px; color: var(--action-strong); }
+.tl-dcard-sub { font-weight: 800; font-size: 11.5px; color: var(--action-strong);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 14px; }
+.tl-dcard ul { list-style: none; display: grid; gap: 9px; margin: 0; padding: 0; }
+.tl-dcard li { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.45;
+  display: flex; gap: 12px; }
+.tl-dot { flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--highlight); margin-top: 6px; }
+.tl-skill { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line));
+  border-radius: 16px; padding: 18px 16px 16px; }
+.tl-skill-n { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--accent-text); }
+.tl-skill-t { font-family: var(--font-display); font-weight: 800; font-size: 16px;
+  color: var(--action); margin: 3px 0 6px; }
+.tl-skill-b { font-size: 13px; color: var(--text-soft); font-weight: 500; line-height: 1.46; }
+.tl-member { display: block; background: var(--card-bg, var(--surface));
+  border: 1px solid var(--line-card, var(--line)); border-radius: 20px; overflow: hidden;
+  box-shadow: var(--shadow); color: inherit; }
+.tl-member > img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; }
+.tl-member-b { padding: 15px 18px 19px; }
+.tl-member-n { font-family: var(--font-display); font-weight: 800; font-size: 19px; color: var(--action); }
+.tl-member-r { font-weight: 700; font-size: 13px; color: var(--text); margin-top: 2px; }
+.tl-member-m { display: inline-flex; align-items: center; gap: 6px; font-weight: 800;
+  font-size: 12.5px; color: var(--text); margin-top: 10px; }
+.tl-credit { background: color-mix(in srgb, var(--on-dark) 8%, transparent);
+  border: 1.5px solid var(--rule-on-dark); border-radius: 13px; padding: 11px 15px; }
+.tl-credit-n { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--on-dark); }
+.tl-credit-r { font-size: 12px; color: var(--highlight); font-weight: 700; }
+.tl-schead { display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 30px; flex-wrap: wrap; margin-bottom: 12px; }
+.tl-zzdiv { display: block; }

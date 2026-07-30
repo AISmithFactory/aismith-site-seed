@@ -30,6 +30,19 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 /* ---- layout ---------------------------------------------------------------*/
 .wrap { max-width: var(--max); margin: 0 auto; padding-left: var(--gutter); padding-right: var(--gutter); }
 
+/* ---- vertical rhythm (v0.13, #122 item 1: the ZG FLOW_CSS bridge folded) ----------
+   Flow spacing for composed prose/grids inside a .wrap; titles, body and grids no
+   longer butt together on content-rich pages. Spacing between spine roles is spine
+   grammar; per-site extra spacing stays composition (S3.2). */
+.wrap .eyebrow + * { margin-top: 14px; }
+.wrap .sec-title + p, .wrap .sec-title + .lead { margin-top: 18px; }
+.wrap p + p, .wrap .lead + p { margin-top: 12px; }
+.wrap .sec-title + .grid, .wrap p + .grid, .wrap .lead + .grid,
+.wrap .grid + .grid, .wrap .grid + p, .wrap .grid + .eyebrow,
+.wrap p + .eyebrow, .wrap .grid + h3, .wrap p + h3 { margin-top: 26px; }
+.wrap h3 + p { margin-top: 8px; }
+.wrap .actions { margin-top: 18px; }
+
 .section { background: var(--sec-bg, var(--bg)); color: var(--sec-text, var(--text));
   padding: clamp(56px, 7vw, 104px) 0; position: relative; }
 .section .lead, .section .sec-soft { color: var(--sec-soft, var(--text-soft)); }
@@ -95,6 +108,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 [data-tone="dark"] .btn-action,
 [data-tone="slate"] .btn-action,
 [data-tone="accent"] .btn-action { outline: 2px solid var(--sec-text); outline-offset: 0; }
+.btn-paper { background: var(--bg); color: var(--text); box-shadow: 0 5px 0 rgba(var(--shadow-color), .3); }
+.btn-paper:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(var(--shadow-color), .3); }
+.btn-paper:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(var(--shadow-color), .3); }
 .btn-line { background: transparent; color: var(--sec-text, var(--text)); border: 2px solid var(--sec-text, var(--text)); }
 .btn-line:hover { background: var(--sec-text, var(--text)); color: var(--sec-bg, var(--bg)); }
 .btn-ghost { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px;
@@ -146,8 +162,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .band p { margin-top: 12px; font-weight: 500; font-size: 16px; max-width: 48ch; line-height: 1.55; color: var(--sec-soft, var(--on-dark-soft)); }
 
 /* ---- cards ----------------------------------------------------------------*/
-.media-card { display: flex; flex-direction: column; background: var(--surface);
-  border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;
+.media-card { display: flex; flex-direction: column; background: var(--card-bg, var(--surface));
+  border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg); overflow: hidden;
   color: var(--text); text-decoration: none; box-shadow: var(--shadow); transition: transform .18s, box-shadow .18s; }
 .media-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
 .media-card .art { position: relative; aspect-ratio: 16/10; background: var(--bg-alt); overflow: hidden; }
@@ -165,11 +181,23 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   justify-content: center; background: var(--surface-warm); box-shadow: var(--shadow);
   pointer-events: none; }
 .media-card .stamp > img, .media-card .stamp > svg { width: 62%; height: 62%; object-fit: contain; }
+/* #128: stamp straddling the media/body seam -- .body is the positioning context and is
+   not clipped, so a negative offset renders in full (the "art" placement clips by
+   definition: a negative offset inside overflow:hidden). */
+.media-card .body { position: relative; }
+.media-card .stamp--seam { top: -30px; left: 20px; bottom: auto; width: 54px; height: 54px;
+  border: 3px solid var(--bg-alt); background: var(--bg-alt); overflow: hidden; transform: rotate(-4deg); }
+/* #128: pill in a body meta row (action tint ground; no shadow fighting a photo) */
+.media-card .meta { display: flex; justify-content: flex-end; min-height: 26px; }
+.media-card .pill--meta { position: static; box-shadow: none;
+  background: color-mix(in srgb, var(--action) 14%, transparent); color: var(--action-strong); }
+/* #128: short qualifier line between title and body */
+.media-card .loc { font-weight: 700; font-size: 12.5px; color: var(--text); margin-bottom: 9px; }
 .media-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin: 6px 0 6px; }
 .media-card p { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.5; margin-bottom: 12px; }
 
 .tier-card { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 13px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg);
   padding: 30px 24px 26px; box-shadow: var(--shadow); }
 .tier-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--tier-bar, var(--accent)); }
 .tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }
@@ -190,8 +218,13 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 
 .event-card.noposter { grid-template-columns: 1fr; }  /* posterless most of the year by design */
 .event-card { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center;
-  background: var(--card-bg, var(--surface)); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
+  background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
 .event-card .poster { width: 132px; border-radius: var(--radius); overflow: hidden; }
+.event-card .poster a { display: block; }
+/* #141 item 4: poster-led variant -- a portrait flyer is the content, not a thumbnail.
+   Width from an optional token; the poster keeps its own aspect (no cover-crop of
+   caller-supplied artwork of unknown aspect). */
+.event-card--lead .poster { width: var(--poster-lead, 220px); }
 .event-card .when { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 8px; }
 .event-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin-bottom: 6px; }
 .event-card .det { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.45; }
@@ -200,9 +233,13 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .stat .num .plus { color: var(--accent); }
 .stat .lbl { font-weight: 600; font-size: 14.5px; margin-top: 6px; max-width: 22ch; color: var(--text-soft); }
 
-.info-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.info-card { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius); padding: 16px 18px; }
 .info-card .k { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--accent-text); margin-bottom: 4px; }
 .info-card .v { font-size: 13.5px; color: var(--text-soft); font-weight: 500; line-height: 1.46; }
+
+/* per-card ground override (#122 item 4): ground="page" re-grounds one card on the
+   page-alt surface (white on ZG) without a skin edit; tokens only. */
+[data-card-ground="alt"] { --card-bg: var(--bg-alt); }
 
 /* generic responsive grids used by page compositions */
 .grid { display: grid; gap: 22px; }
@@ -211,7 +248,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 
 /* ---- forms ----------------------------------------------------------------*/
-.form-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
+.form-card { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg);
   padding: clamp(22px, 3vw, 32px); box-shadow: var(--shadow); }
 .form-card label { display: block; font-weight: 700; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); margin: 14px 0 5px; }
 .form-card label:first-of-type { margin-top: 0; }
@@ -253,6 +290,15 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .legal ul { margin: 8px 0 8px 1.1em; display: grid; gap: 7px; }
 .legal a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
 .legal strong { color: var(--sec-text, var(--text)); font-weight: 700; }
+
+/* ---- breadcrumb (core, #141 item 6) ---------------------------------------*/
+.crumb { display: inline-flex; align-items: center; gap: 7px; font-weight: 800;
+  font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent-text); }
+.crumb a { color: var(--text-soft); }
+.crumb a:hover { color: var(--accent); }
+[data-tone="dark"] .crumb, [data-tone="slate"] .crumb { color: var(--accent-on-dark); }
+[data-tone="dark"] .crumb a, [data-tone="slate"] .crumb a { color: var(--on-dark-soft); }
 
 /* ---- responsive -----------------------------------------------------------*/
 @media (max-width: 900px) {

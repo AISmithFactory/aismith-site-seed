@@ -57,6 +57,7 @@ export function Section({
     for blueprint. Markup ships all three; spine.css gates visibility by [data-skin]. */
 export function Band({
   tone = "dark",
+  eyebrow,
   heading,
   sub,
   actions,
@@ -64,6 +65,7 @@ export function Band({
   ambient = false,
 }: {
   tone?: Tone;
+  eyebrow?: React.ReactNode;
   heading: React.ReactNode;
   sub?: React.ReactNode;
   actions?: React.ReactNode;
@@ -75,6 +77,7 @@ export function Band({
       {ambient && <BandAmbient />}
       <Wrap>
         <div>
+          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
           <h2>{heading}</h2>
           {sub && <p>{sub}</p>}
         </div>
@@ -254,7 +257,7 @@ export function Em({ children }: { children: React.ReactNode }) {
   return <span className="em">{children}</span>;
 }
 
-type BtnVariant = "action" | "line" | "ghost";
+type BtnVariant = "action" | "line" | "ghost" | "paper";
 export function Btn({
   variant = "action",
   href,
@@ -277,5 +280,29 @@ export function Btn({
     <button className={cls} onClick={onClick}>
       {children}
     </button>
+  );
+}
+
+/** Crumb -- the breadcrumb a sub-page opens with, directly above its title (core,
+    #141: on some pages it is the only route back up, so it is navigation, not
+    decoration). `up` is the parent link; omit it when the crumb is a single
+    segment; `children` is the current page. */
+export function Crumb({
+  up,
+  children,
+}: {
+  up?: { label: string; href: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="crumb">
+      {up ? (
+        <>
+          <a href={up.href}>{up.label}</a>
+          <span aria-hidden="true">&middot;</span>
+        </>
+      ) : null}
+      <span>{children}</span>
+    </span>
   );
 }

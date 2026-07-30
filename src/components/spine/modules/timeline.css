@@ -1,0 +1,14 @@
+/* spine/modules/timeline.css -- co-located with timeline.tsx (S3.3). Tokens only
+   (S2.2). Rail = --line, dot = --accent ringed in the section ground, date =
+   --accent-text. */
+.tl { border-left: 3px solid var(--line); padding-left: 26px; margin-top: 8px; max-width: 760px; }
+.tl-row { position: relative; padding: 0 0 26px; }
+.tl-row:last-child { padding-bottom: 0; }
+.tl-row::before { content: ""; position: absolute; left: -33px; top: 3px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--sec-bg, var(--bg-alt)); }
+.tl-when { font-family: var(--font-display); font-weight: 900; font-size: 21px;
+  color: var(--accent-text); line-height: 1; }
+.tl-tx { font-size: 14.5px; color: var(--text-soft); font-weight: 500;
+  line-height: 1.5; margin-top: 4px; max-width: 62ch; }
+.tl-tx strong { color: var(--text); font-weight: 700; }

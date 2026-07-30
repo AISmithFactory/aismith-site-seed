@@ -52,11 +52,12 @@ export function TiltFrame(
 /** Cut-paper circular badge (illustration stamp). Decorative by default; pass `label`
     if the badge carries meaning. Position via style; size sm | lg | xl. */
 export function CutBadge(
-  { children, size = "sm", label, style }:
-  { children: React.ReactNode; size?: "sm" | "lg" | "xl"; label?: string; style?: React.CSSProperties }
+  { children, size = "sm", shape = "cut", label, style }:
+  { children: React.ReactNode; size?: "sm" | "lg" | "xl"; shape?: "cut" | "ring";
+    label?: string; style?: React.CSSProperties }
 ) {
   return (
-    <span className={`deco-badge deco-badge--${size}`} style={style}
+    <span className={`deco-badge deco-badge--${size}${shape === "ring" ? " deco-badge--ring" : ""}`} style={style}
       aria-hidden={label ? undefined : "true"} aria-label={label} role={label ? "img" : undefined}>
       {children}
     </span>

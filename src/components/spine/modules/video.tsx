@@ -17,9 +17,9 @@ type Ratio = "16/9" | "2.35/1";
  * source ratio). The poster is self-hosted (S3.5: tokenised resting state).
  */
 export function VideoFacade(
-  { poster, posterAlt = "", yt, mp4, ratio = "16/9", label, cta = "Play video" }:
+  { poster, posterAlt = "", yt, mp4, ratio = "16/9", label, labelVisible = true, cta = "Play video" }:
   { poster: string; posterAlt?: string; yt?: string; mp4?: string;
-    ratio?: Ratio; label: string; cta?: string }
+    ratio?: Ratio; label: string; labelVisible?: boolean; cta?: string }
 ) {
   const [open, setOpen] = React.useState(false);
   return (
@@ -57,7 +57,9 @@ export function VideoFacade(
               <path fill="currentColor" d="M8 5v14l11-7z" />
             </svg>
           </span>
-          <span className="vf-label">{label}</span>
+          {/* #129: a facade is not always captioned; `label` stays the accessible
+              name (the button aria-label above) when the visible caption is off. */}
+          {labelVisible && <span className="vf-label">{label}</span>}
         </button>
       )}
     </div>

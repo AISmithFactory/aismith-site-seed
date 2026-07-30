@@ -156,6 +156,39 @@ for (const f of [...walk(P.content, [".tsx", ".ts"]), ...walk(P.routes, [".tsx",
 }
 if (colourLeak.length) bad(`raw hex colour in content/routes (use semantic tokens): ${colourLeak.join(", ")}`);
 else ok("no raw hex colour literals in content/routes");
+// (d2) no UNDECLARED var(--x) in content/routes (S2.2 -- #123: an undefined custom
+// property resolves to the initial value and renders wrong SILENTLY -- the ZG
+// black-illustration incident. Stronger than the hex check: an undeclared var()
+// cannot render as intended.) Allowed vocabulary = every --name declared in
+// tokens.css, plus every --name the spine itself declares or reads as an optional
+// slot (var(--x, fallback)) -- collected from the seed spine, so the sanctioned
+// slot set never has to be hand-listed here.
+{
+  const declared = new Set();
+  const collectDecls = (css) => { for (const m of stripComments(css || "").matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]); };
+  collectDecls(tokens);
+  const spineCssFiles = [];
+  for (const dir of [join(ROOT, "src/styles"), join(ROOT, "src/components/spine")])
+    for (const f of walk(dir, [".css"])) spineCssFiles.push(f);
+  for (const f of spineCssFiles) {
+    const css = stripComments(read(f) || "");
+    collectDecls(css);
+    // optional slots: a var() WITH a fallback declares the slot name as sanctioned
+    for (const m of css.matchAll(/var\(\s*(--[\w-]+)\s*,/g)) declared.add(m[1]);
+  }
+  const offenders = new Map();
+  for (const f of [...walk(P.content, [".tsx", ".ts", ".css"]), ...walk(P.routes, [".tsx", ".ts"])]) {
+    const body = stripComments(read(f) || "");
+    const badNames = new Set();
+    for (const m of body.matchAll(/var\(\s*(--[\w-]+)\s*[,)]/g))
+      if (!declared.has(m[1])) badNames.add(m[1]);
+    if (badNames.size) offenders.set(relative(ROOT, f), [...badNames]);
+  }
+  if (offenders.size) {
+    for (const [f, names] of offenders)
+      bad(`undeclared custom property in content/routes (renders as the initial value): ${f} -> ${names.join(", ")}`);
+  } else ok("every var(--x) in content/routes is declared (tokens.css or spine slot)");
+}
 // (e) stray-stylesheet guard (auditor hardening): only spine.css + tokens.css exist
 const styleFiles = walk(P.stylesDir, [".css"]).map((f) => basename(f));
 const stray = styleFiles.filter((n) => n !== "spine.css" && n !== "tokens.css");

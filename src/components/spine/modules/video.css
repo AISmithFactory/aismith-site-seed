@@ -14,7 +14,10 @@
   background: linear-gradient(180deg, transparent 45%, rgba(var(--shadow-color), .62) 100%); }
 .vf-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; background: var(--action); color: var(--on-dark);
+  justify-content: center;
+  /* #129: optional skin slots -- the play button is a media affordance, not a CTA;
+     undeclared slots keep the current look. */
+  background: var(--facade-play-bg, var(--action)); color: var(--facade-play-ink, var(--on-dark));
   box-shadow: var(--shadow); transition: transform .16s ease; }
 .vf-poster:hover .vf-play { transform: translate(-50%, -50%) scale(1.08); }
 .vf-poster:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }

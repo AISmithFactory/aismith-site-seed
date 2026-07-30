@@ -2,21 +2,27 @@
 import * as React from "react";
 
 export function MediaCard(
-  { image, alt, category, title, body, href, more = "Learn more", pill, stamp }:
-  { image?: string; alt?: string; category?: string; title: string; body?: string;
-    href?: string; more?: string; pill?: string; stamp?: React.ReactNode }
+  { image, alt, category, title, loc, body, href, more = "Learn more", pill, stamp,
+    stampPlacement = "art", pillPlacement = "art", ground }:
+  { image?: string; alt?: string; category?: string; title: string; loc?: string;
+    body?: string; href?: string; more?: string; pill?: string; stamp?: React.ReactNode;
+    stampPlacement?: "art" | "seam"; pillPlacement?: "art" | "meta";
+    ground?: "surface" | "alt" }
 ) {
   const Tag: any = href ? "a" : "div";
   return (
-    <Tag className="media-card" href={href}>
+    <Tag className="media-card" href={href} data-card-ground={ground === "alt" ? "alt" : undefined}>
       <div className="art">
         {image && <img src={image} alt={alt || ""} />}
-        {pill && <span className="pill">{pill}</span>}
-        {stamp && <span className="stamp" aria-hidden="true">{stamp}</span>}
+        {pill && pillPlacement === "art" && <span className="pill">{pill}</span>}
+        {stamp && stampPlacement === "art" && <span className="stamp" aria-hidden="true">{stamp}</span>}
       </div>
       <div className="body">
+        {stamp && stampPlacement === "seam" && <span className="stamp stamp--seam" aria-hidden="true">{stamp}</span>}
+        {pill && pillPlacement === "meta" && <div className="meta"><span className="pill pill--meta">{pill}</span></div>}
         {category && <span className="cat">{category}</span>}
         <h3>{title}</h3>
+        {loc && <p className="loc">{loc}</p>}
         {body && <p>{body}</p>}
         {href && <span className="btn-ghost">{more} &rarr;</span>}
       </div>
@@ -41,12 +47,20 @@ export function TierCard(
 }
 
 export function EventCard(
-  { poster, posterAlt, when, title, details, href }:
-  { poster?: string; posterAlt?: string; when: string; title: string; details?: string; href?: string }
+  { poster, posterAlt, posterHref, posterLead = false, when, title, details, href }:
+  { poster?: string; posterAlt?: string; posterHref?: string; posterLead?: boolean;
+    when: string; title: string; details?: string; href?: string }
 ) {
+  const img = poster && <img src={poster} alt={posterAlt || ""} loading="lazy" />;
   return (
-    <div className={poster ? "event-card" : "event-card noposter"}>
-      {poster && <div className="poster"><img src={poster} alt={posterAlt || ""} /></div>}
+    <div className={[poster ? "event-card" : "event-card noposter", posterLead ? "event-card--lead" : ""].filter(Boolean).join(" ")}>
+      {poster && (
+        <div className="poster">
+          {posterHref
+            ? <a href={posterHref} target="_blank" rel="noopener noreferrer">{img}</a>
+            : img}
+        </div>
+      )}
       <div>
         <span className="when">{when}</span>
         <h3>{title}</h3>

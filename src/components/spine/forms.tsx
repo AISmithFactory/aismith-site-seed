@@ -3,7 +3,9 @@
 // No secret, no service-role, no hub-DB write ever lives client-side.
 import * as React from "react";
 
-type Field = { name: string; label: string; type?: "text" | "email" | "textarea" | "select"; options?: string[]; required?: boolean };
+type Opt = string | { label: string; value: string };
+type Field = { name: string; label: string; type?: "text" | "email" | "textarea" | "select";
+  options?: Opt[]; placeholder?: string; required?: boolean };
 
 async function postJson(action: string, data: Record<string, string>) {
   const res = await fetch(action, {
@@ -43,7 +45,16 @@ export function ContactForm({ action, fields, submitLabel = "Send", done = "Than
           {f.type === "textarea"
             ? <textarea id={f.name} name={f.name} required={f.required} />
             : f.type === "select"
-              ? <select id={f.name} name={f.name} required={f.required}>{(f.options || []).map((o) => <option key={o}>{o}</option>)}</select>
+              /* #141 item 5: {label,value} options + a real placeholder -- value="" +
+                 required means the placeholder can never submit itself as the answer. */
+              ? <select id={f.name} name={f.name} required={f.required} defaultValue={f.placeholder ? "" : undefined}>
+                  {f.placeholder && <option value="" disabled>{f.placeholder}</option>}
+                  {(f.options || []).map((o) => {
+                    const label = typeof o === "string" ? o : o.label;
+                    const value = typeof o === "string" ? o : o.value;
+                    return <option key={value} value={value}>{label}</option>;
+                  })}
+                </select>
               : <input id={f.name} name={f.name} type={f.type || "text"} required={f.required} />}
         </div>
       ))}
@@ -52,18 +63,26 @@ export function ContactForm({ action, fields, submitLabel = "Send", done = "Than
   );
 }
 
-export function NewsletterForm({ action, placeholder = "Your email", submitLabel = "Subscribe", done = "You're on the list." }:
-  { action: string; placeholder?: string; submitLabel?: string; done?: string }) {
+/** NewsletterForm v2 -- stacked NAME + EMAIL is the fleet default (operator decision
+    2026-07-27, #122 item 5). Posts {name, email}; the shared `contact` fn's signup
+    mode folds `name` into the mail. Pass withName={false} for the email-only shape. */
+export function NewsletterForm({ action, withName = true, namePlaceholder = "Your name",
+  placeholder = "Your email", submitLabel = "Subscribe", done = "You're on the list." }:
+  { action: string; withName?: boolean; namePlaceholder?: string; placeholder?: string;
+    submitLabel?: string; done?: string }) {
   const [sent, setSent] = React.useState(false);
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    try { await postJson(action, { email: String(fd.get("email") || "") }); } finally { setSent(true); }
+    const data: Record<string, string> = { email: String(fd.get("email") || "") };
+    if (withName) data.name = String(fd.get("name") || "");
+    try { await postJson(action, data); } finally { setSent(true); }
   };
   if (sent) return <p className="nl-done">{done}</p>;
   return (
     <form className="nl-form" onSubmit={onSubmit}>
-      <input name="email" type="email" required placeholder={placeholder} />
+      {withName && <input name="name" type="text" required placeholder={namePlaceholder} aria-label={namePlaceholder} />}
+      <input name="email" type="email" required placeholder={placeholder} aria-label={placeholder} />
       <button className="btn btn-action" type="submit">{submitLabel} &rarr;</button>
     </form>
   );
