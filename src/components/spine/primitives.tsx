@@ -259,8 +259,11 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 export function Lead({ children }: { children: React.ReactNode }) {
   return <p className="lead">{children}</p>;
 }
-export function Em({ children }: { children: React.ReactNode }) {
-  return <span className="em">{children}</span>;
+/** Em -- accent-coloured word. `hue` (1-5) colours the word in a declared
+    --hue-N-text instead (AA-gated skin slot; undeclared = inert, the word keeps the
+    title colour). Light-ground device; on dark tones plain Em. */
+export function Em({ hue, children }: { hue?: 1 | 2 | 3 | 4 | 5; children: React.ReactNode }) {
+  return <span className={hue ? `em-hue-${hue}` : "em"}>{children}</span>;
 }
 
 type BtnVariant = "action" | "line" | "ghost" | "paper";

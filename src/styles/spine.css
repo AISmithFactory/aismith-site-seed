@@ -68,6 +68,17 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .em { color: var(--accent-text); }   /* accent AS TEXT on light → AA-safe (S2.3) */
 [data-tone="dark"] .em, [data-tone="slate"] .em { color: var(--accent-on-dark); }
 [data-tone="accent"] .em { color: var(--on-dark); }
+/* Hue-as-TEXT variants (#122 item 6c, operator-ruled IN 2026-07-30): colour a word in
+   the brand's hue family on a LIGHT ground. The text twin of the S4.6 background slots,
+   by the --accent/--accent-text precedent: raw hue fills fail AA as text, so a skin
+   declares a darkened --hue-N-text (AA-gated vs the light grounds, verify [2]).
+   Undeclared = inert: the word keeps the title colour (currentColor). Light-ground
+   device only; on dark tones use .em. */
+.em-hue-1 { color: var(--hue-1-text, currentColor); }
+.em-hue-2 { color: var(--hue-2-text, currentColor); }
+.em-hue-3 { color: var(--hue-3-text, currentColor); }
+.em-hue-4 { color: var(--hue-4-text, currentColor); }
+.em-hue-5 { color: var(--hue-5-text, currentColor); }
 
 /* ---- Section tone map (moved here from tokens.css, S2.2) -------------------
    Spine-invariant: fixed tone enum x fixed token names, identical on every site, no literal

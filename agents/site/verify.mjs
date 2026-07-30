@@ -228,6 +228,14 @@ const NORMAL_PAIRS = [
 const ACCENT_LARGE_PAIRS = [
   ["--on-dark", "--accent"],
 ];
+// S4.6 hue slots + hue-as-text (declared-only; undeclared tokens skip below): the
+// standard has ALWAYS said each declared --hue-N/--hue-N-ink pair is AA-gated, but no
+// pair was in the list until v1.8.2 -- the gate now matches the standard. --hue-N-text
+// (ruled in 2026-07-30) is checked as normal text on the three light grounds.
+for (let n = 1; n <= 5; n++) {
+  NORMAL_PAIRS.push([`--hue-${n}-ink`, `--hue-${n}`]);
+  NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
+}
 let aaChecked = 0;
 for (const [fg, bg] of NORMAL_PAIRS) {
   if (!T[fg] || !T[bg]) continue;
