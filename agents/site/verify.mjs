@@ -119,7 +119,23 @@ if (base) {
     const changed = execSync(`git diff --name-only ${base}...HEAD`, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString().trim().split("\n").filter(Boolean);
     const spineTouched = changed.filter((f) => f.includes("src/components/spine/") || f.endsWith("src/styles/spine.css"));
-    if (spineTouched.length) bad(`spine files changed vs ${base}: ${spineTouched.join(", ")}`);
+    if (spineTouched.length) {
+      // #150: a SANCTIONED Trigger-1 resync is exactly "spine changed vs parent", and [1b]
+      // proves byte-identity with the sha-pinned seed in this same run. Rule: [1a] passes iff
+      // spine is unchanged vs the parent OR every touched spine file is byte-identical to the
+      // pinned seed (definitionally a resync, not a local edit). A touched file matching
+      // neither parent nor seed stays a hard FAIL. No new inputs; no weakening of the guard.
+      const rel = (f) => f.replace(/\\/g, "/").replace(/^.*?(src\/(components\/spine|styles)\/)/, "$1");
+      const notSeed = seedSpine
+        ? spineTouched.filter((f) => {
+            const r = rel(f);
+            const p = join(ROOT, r);
+            return !(r in seedSpine) || !existsSync(p) || sha(readFileSync(p)) !== seedSpine[r];
+          })
+        : spineTouched; // no seed baseline resolvable: keep the old fail-closed behaviour
+      if (notSeed.length) bad(`spine files changed vs ${base} and differ from the pinned seed (local edit, not a resync): ${notSeed.join(", ")}`);
+      else ok(`spine changed vs ${base} but byte-identical to the pinned seed (sanctioned resync, ${spineTouched.length} files)`);
+    }
     else ok(`git diff vs ${base}: no spine path changed (${changed.length} files touched)`);
   } catch { (CI ? bad : soft)("git diff failed; relying on static + hash checks"); }
 } else {
