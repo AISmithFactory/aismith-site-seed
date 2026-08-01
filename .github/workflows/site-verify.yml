@@ -1,0 +1,124 @@
+# site-verify.yml -- AUDIT AGENT, mechanical PR gate (as-agent-fleet.md Sec3.2 / Sec5 / Sec8).
+#
+# WHAT THIS IS. The audit agent's runnable core (agents/site/verify.mjs) bound as a
+# REQUIRED PR status check, so it fails the build independent of any model judgement
+# (Sec7: "a check bound as a git hook / required status / CI step that fails
+# independent of the model"). This is where audit independence actually lives -- a
+# non-builder running verify.mjs over the repo's PR -- NOT a second Cowork window.
+#
+# Read-only by definition (Sec3.2): it cannot mutate anything; Supabase MCP not used.
+# It IS the gate for the write agents -- scaffold's output is not "done" and support's
+# change is not mergeable until this passes (Sec6: "the audit is the mechanical gate
+# for every write agent").
+#
+# TEMPLATE -- this file is the Factory-canonical copy at agents/site/workflows/. It
+# ships into each site / site-seed repo at .github/workflows/site-verify.yml.
+# verify.mjs ships alongside it at agents/site/verify.mjs (committed repo artifact).
+#
+# SHIPPED BY THE SEED (v0.13.4, contract patch #155). This file is stamped by
+# site-contract and lands in each site repo at .github/workflows/site-verify.yml. Do NOT
+# author it per site -- the first dry run proved authors should copy it, not write it.
+#
+# THE SEED IS PUBLIC (2026-08-01). AISmithFactory/aismith-site-seed was published, so the
+# checkout below needs NO credential: actions/checkout on a public repo works with the
+# default GITHUB_TOKEN. There is no SEED_READ_TOKEN to provision, rotate or forget, and a
+# trainee org can clone the seed with no grant at all.
+#
+# DO NOT GATE THIS WORKFLOW ON A SECRET BEING SET. The gate asserts "was the spine proved
+# against the pinned seed", so it must test that the seed CHECKED OUT -- not that a token
+# exists. A credential-presence test goes red on a healthy repo the day the seed becomes
+# public (ZG) and leaves the gate unarmed on a repo that could have run it (AS). Both were
+# live on 2026-08-01 while the seed was readable by anyone.
+#
+# If a future seed is private, add `token: ${{ secrets.SEED_READ_TOKEN }}` to the checkout
+# step. The reachability test below is unchanged either way, and must never be replaced by
+# a check on the secret.
+#
+# TO INSTANTIATE in a site repo, set the two repo-level values below (SEED_REF to the
+# charter-pinned sha, and the CHARTER path if the site ships a charter), then in GitHub:
+#   Settings -> Branches -> Branch protection on `main` -> Require status checks ->
+#   add "site-verify" as REQUIRED. Without that last step the workflow runs but does
+#   not block merge -- "required" is what makes it a gate, not just a report.
+
+name: site-verify
+
+on:
+  pull_request:
+    branches: [main]
+  # Re-run on direct pushes to main as a backstop (e.g. an admin override merge).
+  push:
+    branches: [main]
+
+# Read-only token. The audit never writes to the repo.
+permissions:
+  contents: read
+
+env:
+  # The authoritative spine source verify.mjs re-derives the baseline from at runtime.
+  # Point this at the site-seed repo (holds the frozen spine: src/components/spine/**
+  # + src/styles/spine.css). A missing/unresolvable seed FAILS CLOSED under --ci.
+  SEED_REPO: AISmithFactory/aismith-site-seed
+  # Pin to the sha the charter names, never a moving ref: the baseline verify re-derives
+  # must be the one the site was built against. 'main' silently re-baselines the gate.
+  SEED_REF: main   # the seed IS the baseline; it verifies against its own HEAD
+  # The charter to reconcile routes against (bidirectional). Leave as-is if the site
+  # ships <slug>-site-charter.md at the repo root; clear the --charter arg below if not.
+  CHARTER: ""
+
+jobs:
+  site-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout site repo (full history for the scoped-diff base)
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth 0 so verify.mjs can git-diff the PR base...HEAD for the
+          # spine-touch scoped-diff check.
+          fetch-depth: 0
+
+      - name: Checkout authoritative spine seed (baseline source)
+        id: seed
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SEED_REPO }}
+          ref: ${{ env.SEED_REF }}
+          path: .seed
+          # Private seed: this token is REQUIRED (GITHUB_TOKEN cannot read another repo).
+          token: ${{ secrets.SEED_READ_TOKEN || github.token }}
+
+      - name: Announce an unreachable seed (skip visibly, never fake green)
+        if: steps.seed.outcome != 'success'
+        run: |
+          echo "::warning title=site-verify degraded::seed checkout failed \
+          (${{ env.SEED_REPO }}@${{ env.SEED_REF }}). The spine gate is SKIPPED, not passed. \
+          The seed is public, so this is a wrong ref or a network failure, not a missing secret. \
+          Do NOT drop --seed or --ci to make this green."
+
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Typecheck + build (always run, seed or no seed)
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Run the Section-6 gate (fail-closed)
+        # SKIPPED, not softened, when the seed is unavailable. The arguments below are
+        # invariant: --ci and --seed are never removed to make this green.
+        if: steps.seed.outcome == 'success'
+        # --ci promotes every soft check to a hard fail (no silent pass on a missing
+        # seed/base/charter). --seed proves the spine byte-for-byte. --base pins the
+        # scoped-diff base to the PR base on pull_request; on push it falls back to
+        # verify.mjs's own merge-base resolution.
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          ARGS="--ci --seed .seed"
+          if [ -n "$BASE" ]; then ARGS="$ARGS --base $BASE"; fi
+          if [ -n "${{ env.CHARTER }}" ]; then ARGS="$ARGS --charter ${{ env.CHARTER }}"; fi
+          echo "node agents/site/verify.mjs $ARGS"
+          node agents/site/verify.mjs $ARGS
