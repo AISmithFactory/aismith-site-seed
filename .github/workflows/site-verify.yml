@@ -66,7 +66,7 @@ env:
   SEED_REF: main   # the seed IS the baseline; it verifies against its own HEAD
   # The charter to reconcile routes against (bidirectional). Leave as-is if the site
   # ships <slug>-site-charter.md at the repo root; clear the --charter arg below if not.
-  CHARTER: ""
+  CHARTER: "aismith-site-charter.md"   # the seed ships its own charter at the repo root
 
 jobs:
   site-verify:
