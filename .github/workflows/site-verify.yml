@@ -60,6 +60,9 @@ env:
   SEED_REPO: AISmithFactory/aismith-site-seed
   # Pin to the sha the charter names, never a moving ref: the baseline verify re-derives
   # must be the one the site was built against. 'main' silently re-baselines the gate.
+  # MUST be the FULL 40-character sha, never an abbreviated one: actions/checkout
+  # fetches the ref directly and a short sha fails with "git failed with exit code 1".
+  # Never a moving ref such as `main` (site-contract 1.8.6).
   SEED_REF: main   # the seed IS the baseline; it verifies against its own HEAD
   # The charter to reconcile routes against (bidirectional). Leave as-is if the site
   # ships <slug>-site-charter.md at the repo root; clear the --charter arg below if not.
@@ -101,11 +104,15 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Typecheck + build (always run, seed or no seed)
+      - name: Build + typecheck (always run, seed reachable or not)
+        # BUILD BEFORE TYPECHECK, deliberately. A TanStack site generates
+        # src/routeTree.gen.ts at build time; where that file is gitignored rather than
+        # committed, a bare `tsc --noEmit` on a fresh CI checkout collapses every route
+        # type to `undefined` and fails on correct code. Building first generates it.
         run: |
           npm ci
-          npx tsc --noEmit
           npm run build
+          npx tsc --noEmit
 
       - name: Run the Section-6 gate (fail-closed)
         # SKIPPED, not softened, when the seed is unavailable. The arguments below are
