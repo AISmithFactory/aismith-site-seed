@@ -429,14 +429,46 @@ function resolveLogoNode() {
 const logoRef = resolveLogoNode();
 // (c) classify image vs text-only.
 const VECTOR = /<(path|polygon|polyline|circle|ellipse|rect|line|image|use)\b/i;
-function isImageNode(node, srcText) {
+// Resolve a local module specifier ("@/components/Logo", "./Logo") to a file on disk.
+// v0.13.4 (#155 companion): a mark delivered as a LOCAL COMPONENT is still an image mark.
+// Before this, isImageNode saw only inline JSX / <img> / an imported asset FILE, so
+// aismith.io's real anvil-and-spark vector -- drawn with currentColor so the header
+// renders it Iron and the footer Paper -- classified as a text-only wordmark. Proof that
+// this was the checker and not the site: the reference seed's own logo failed it too.
+const CODE_EXT = [".tsx", ".ts", ".jsx", ".js"];
+function resolveLocalModule(spec) {
+  if (!spec) return null;
+  let rel = null;
+  if (spec.startsWith("@/")) rel = join(ROOT, "src", spec.slice(2));
+  else if (spec.startsWith("~/")) rel = join(ROOT, "src", spec.slice(2));
+  else if (spec.startsWith("./") || spec.startsWith("../")) rel = join(ROOT, "src", spec);
+  else if (spec.startsWith("src/") || spec.startsWith("/src/")) rel = join(ROOT, spec.replace(/^\//, ""));
+  else return null; // bare specifier = a package, not a local mark
+  for (const cand of [rel, ...CODE_EXT.map((e) => rel + e), ...CODE_EXT.map((e) => join(rel, "index" + e))]) {
+    try { if (existsSync(cand) && statSync(cand).isFile()) return cand; } catch { /* ignore */ }
+  }
+  return null;
+}
+function isImageNode(node, srcText, depth = 0) {
   if (/<img\b/i.test(node)) return true;
   if (/<svg\b/i.test(node) && VECTOR.test(node)) return true;
-  // imported asset referenced by the node (import x from "...png|svg|webp|...")
   const ids = [...node.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].map((m) => m[1]);
   for (const id of ids) {
+    // (i) imported asset FILE referenced by the node
     const imp = (srcText || "").match(new RegExp("import\\s+" + id + "\\s+from\\s+[\"'`][^\"'`]+\\.(svg|png|webp|jpe?g|avif|gif)[\"'`]", "i"));
     if (imp) return true;
+    // (ii) LOCAL COMPONENT module: resolve it and classify its contents (one hop, no cycles)
+    if (depth < 2) {
+      const m = (srcText || "").match(
+        new RegExp("import\\s+(?:\\{[^}]*\\b" + id + "\\b[^}]*\\}|" + id + ")\\s+from\\s+[\"'`]([^\"'`]+)[\"'`]")
+      );
+      const file = m && resolveLocalModule(m[1]);
+      if (file) {
+        let body = "";
+        try { body = readFileSync(file, "utf8"); } catch { /* unreadable = not proof */ }
+        if (body && isImageNode(body, body, depth + 1)) return true;
+      }
+    }
   }
   return false;
 }
