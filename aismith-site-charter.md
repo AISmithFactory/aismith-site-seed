@@ -8,10 +8,28 @@ against.
 **URL:** demo = `<slug>.demos.aismith.io` (Netlify) with `seo.noindex=true` (public but
 uncrawlable); production = `aismith.io` with `seo.noindex=false`. Same build, config-only switch.
 
-## Pages / routes (S7.1)
-Routes: `index`, `restaurants`, `cultural`, `ownership`, `plans`, `website`, `privacy`.
-Each route carries its own `head()` with a unique title; `privacy` renders the core
-`PrivacyNotice` (S7.4). A build reskins this reference set to the client's actual inventory.
+## Pages / routes (S7.1, S8.4a)
+Every public route is declared in the fenced `routes` block below, one per line,
+slash-prefixed, `/` for the index. **Nothing outside this block is read as a route
+declaration** (site-contract 1.8.8): the previous parser scavenged backticked tokens out of
+prose, which meant a charter mentioning `fetch` declared a route called fetch. `verify` [5]
+reconciles this block against `src/routes/*.tsx` in BOTH directions -- an undeclared repo
+route is an orphan, a declared route with no file is an unfinished retirement.
+
+```routes
+/
+/restaurants
+/cultural
+/ownership
+/plans
+/website
+/privacy
+```
+
+Each route carries its own `head()` with a unique title; `/privacy` renders the core
+`PrivacyNotice` (S7.4). A build reskins this reference set to the client's actual inventory
+and **rewrites the block above to match** -- a fork that changes its pages and not its
+charter now fails S8.4a at the gate.
 
 ## Skin (S2)
 - Palette: "Ink, Paper, Ember" — values filled in `src/styles/tokens.css`.

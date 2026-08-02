@@ -62,8 +62,21 @@ let hardFail = false;
 const out = [];
 const ok = (m) => out.push(`  PASS  ${m}`);
 const bad = (m) => { out.push(`  FAIL  ${m}`); hardFail = true; };
-// In --ci, a soft check is promoted to a hard fail (fail-closed). Outside CI it warns.
+// THREE severities, and the distinction is load-bearing (site-contract 1.8.8).
+//
+//   bad()    a proven violation. Always fails.
+//   soft()   COULD NOT VERIFY -- a missing seed, base or charter. Fails CLOSED in CI,
+//            because an unverifiable gate that passes is worse than one that fails.
+//   review() A HUMAN SHOULD LOOK. Never fails, in CI or out.
+//
+// review() exists because soft() was doing both jobs under one name, and the superlative
+// check -- whose own message says "review" and carries an example of an acceptable hit --
+// was wired to it. In CI there is no human, so a check that asks for judgement can only
+// ever block. That made [3] VOICE a permanent blocker on aismith-site for two hits that
+// were both false positives, one of them a liability hedge in the terms page. A check
+// that cannot be satisfied mechanically is not a gate; it is a report.
 const soft = (m) => { out.push(`  ${CI ? "FAIL" : "WARN"}  ${m}`); if (CI) hardFail = true; };
+const review = (m) => out.push(`  REVIEW  ${m}`);
 const note = (m) => out.push(`  ----  ${m}`);
 
 function walk(dir, exts) {
@@ -299,14 +312,18 @@ for (const f of copyFiles) {
 if (emDash) bad(`${emDash} em-dash(es) in rendered copy (literal or entity): ${emFiles.join(", ")}`);
 else ok("no em-dashes in rendered copy (literal or entity; comments exempt, S9.4)");
 
-const SUPER = /\b(uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|best|finest|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b/gi;
+// "best" is the noisy one: "as best we reasonably can" is a liability hedge and
+// "best practice" is a term of art -- neither is a marketing claim, and both were failing
+// this gate. Excluded by context rather than dropped from the list, so promotional uses
+// ("the best CRM") still surface.
+const SUPER = /(?<!\bas\s)\b(uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|best|finest|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
 const superHits = [];
 for (const f of copyFiles) {
   const body = stripComments(read(f) || "");
   const hits = [...body.matchAll(SUPER)].map((m) => m[0]);
   if (hits.length) superHits.push(`${relative(ROOT, f)}: ${[...new Set(hits)].join(", ")}`);
 }
-if (superHits.length) soft(`superlative candidates (review; "Beste klant" salutation is fine): ${superHits.join(" | ")}`);
+if (superHits.length) review(`superlative candidates -- ADVISORY, never blocks ("Beste klant" is fine, so is a liability hedge): ${superHits.join(" | ")}`);
 else ok("no superlative candidates");
 
 // == 4. PER-ROUTE META + LANG + NOINDEX + TITLE UNIQUENESS ==
@@ -356,20 +373,56 @@ if (smap) {
 
 // == 5. CHARTER <-> REPO (bidirectional -- auditor hardening) ==
 out.push("\n[5] CHARTER <-> REPO -- routes match in BOTH directions");
+// DECLARE-THEN-ENFORCE (site-contract 1.8.8), the same pattern as [6] LOGO and the
+// sitemap<->host check. The charter declares its routes in ONE fenced block:
+//
+//     ```routes
+//     /
+//     /apps
+//     /contact
+//     ```
+//
+// and nothing outside that block is read. The previous parser scavenged every backticked
+// lowercase token in the whole document, which on the aismith.io charter meant it declared
+// `aismith-site`, `aismith-site-seed`, `aismith-skins`, `data-skin`, `fetch`, `forge`,
+// `noindex` and `verify` as ROUTES while missing all twelve real ones -- the charter writes
+// them slash-prefixed as `/apps`, and the regex required a leading letter. It then reported
+// 11 of 12 repo routes as undeclared orphans. Its own guard ("charter declares routes none
+// of which exist") passed only because `contact` happened to appear in backticks elsewhere
+// in the prose: one coincidental token was the only thing stopping the check from admitting
+// it had parsed nothing. Widening the regex would have kept the scavenging; a delimited
+// block ends it.
+const routeToPath = (r) => (r === "index" ? "/" : `/${r}`);
+const normalise = (d) => {
+  let t = d.trim().replace(/[`'"]/g, "");
+  if (!t || t.startsWith("#")) return null;
+  if (!t.startsWith("/")) t = `/${t}`;
+  return t.replace(/\/+$/, "") || "/";
+};
 if (CHARTER && existsSync(CHARTER)) {
   const ch = read(CHARTER) || "";
-  const repoRoutes = routeFiles.map((f) => basename(f).replace(/\.tsx$/, ""));
-  const repoSet = new Set(repoRoutes);
-  const declared = new Set();
-  for (const m of ch.matchAll(/`([a-z][a-z0-9-]*)`/g)) declared.add(m[1]);
-  const block = ch.match(/routes?[:\-]\s*([^\n]+(?:\n\s+[^\n]+)*)/i);
-  if (block) for (const m of block[1].matchAll(/[a-z][a-z0-9-]*/gi)) declared.add(m[0]);
-  const orphanInRepo = [...repoSet].filter((r) => !declared.has(r) && r !== "__root");
-  if (!declared.size) soft("charter supplied but no route list parsed -- verify charter format");
-  else {
+  const block = ch.match(/```routes\s*\n([\s\S]*?)```/);
+  if (!block) {
+    soft(`charter ${relative(ROOT, CHARTER)} has no \`\`\`routes block -- add one listing every ` +
+         `public route, one per line, slash-prefixed (/ for index). Nothing outside that block ` +
+         `is read as a route declaration` + (CI ? " (failing closed in CI)" : ""));
+  } else {
+    const declared = new Set(block[1].split("\n").map(normalise).filter(Boolean));
+    const repoPaths = new Map(
+      routeFiles.map((f) => {
+        const r = basename(f).replace(/\.tsx$/, "");
+        return [routeToPath(r), relative(ROOT, f)];
+      })
+    );
+    const orphanInRepo = [...repoPaths.keys()].filter((p2) => !declared.has(p2));
+    const declaredNotBuilt = [...declared].filter((p2) => !repoPaths.has(p2));
+    if (!declared.size) bad(`charter \`\`\`routes block is empty`);
     if (orphanInRepo.length) bad(`repo route(s) not declared in charter (orphan): ${orphanInRepo.join(", ")}`);
-    if (![...declared].some((r) => repoSet.has(r))) bad("charter declares routes none of which exist in the repo");
-    if (!orphanInRepo.length && [...declared].some((r) => repoSet.has(r))) ok("charter <-> repo routes reconcile (no orphans, no undeclared)");
+    // The other direction, and it is the half that catches a RETIRED route still declared.
+    // Previously this was only "none of which exist", which one accidental match satisfied.
+    if (declaredNotBuilt.length) bad(`charter declares route(s) that do not exist in the repo: ${declaredNotBuilt.join(", ")}`);
+    if (!orphanInRepo.length && !declaredNotBuilt.length && declared.size)
+      ok(`charter <-> repo routes reconcile both ways (${declared.size} declared, ${repoPaths.size} built)`);
   }
 } else {
   (CI ? bad : soft)(`no --charter supplied; charter<->repo reconciliation skipped` + (CI ? " (failing closed in CI)" : ""));
