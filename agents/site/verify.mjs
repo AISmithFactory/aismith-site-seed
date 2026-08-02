@@ -241,6 +241,17 @@ function parseTokens(css) {
 }
 const T = parseTokens(stripComments(tokens || ""));
 // Normal body-text pairs -- must clear 4.5.
+//
+// GENERATED, NOT ENUMERATED (v0.13.9). This was a hardcoded list of 15 tone pairs while
+// S2.3 said "the full matrix", and the gap between those two sentences shipped a live
+// 1.55:1 on zuidgeluid.be. A Section sets `tone` and `hue` INDEPENDENTLY: the ground comes
+// from the hue, the ink still comes from the tone. So `tone="slate" hue={3}` renders a
+// dark-register ink on a light hue ground -- a pair that appeared in no list, because
+// S2.3 owned text x tone, S4.6 owned hue x hue-ink, and neither owned the product.
+// Enumerating cannot express a cross-product; discovering the declared hues can.
+const TONE_GROUNDS = ["--bg", "--bg-alt", "--surface", "--dark", "--slate"];
+const LIGHT_INKS = ["--text", "--text-soft", "--accent-text"];
+const DARK_INKS  = ["--on-dark", "--on-dark-soft", "--accent-on-dark"];
 const NORMAL_PAIRS = [
   ["--text", "--bg"], ["--text", "--bg-alt"], ["--text", "--surface"],
   ["--text-soft", "--bg"], ["--text-soft", "--bg-alt"], ["--text-soft", "--surface"],
@@ -248,6 +259,36 @@ const NORMAL_PAIRS = [
   ["--accent-text", "--bg"], ["--accent-text", "--bg-alt"], ["--accent-text", "--surface"],
   ["--accent-on-dark", "--dark"], ["--accent-on-dark", "--slate"],
 ];
+// The tone x hue cells that ACTUALLY OCCUR, read from the markup -- not every arithmetic
+// pair. A blind cross-product of six inks x five hues yields 19 "failures" on ZG where two
+// are real, and a checker that fires where there is no defect trains people to ignore it,
+// which lands in the same place as one that checks nothing. So: find every Section that
+// sets BOTH tone and hue, and check exactly the inks that tone puts on that hue's ground.
+// A site that never combines them generates zero extra pairs; an undeclared hue is inert.
+const TONE_INKS = {
+  paper:   LIGHT_INKS, alt: LIGHT_INKS, surface: LIGHT_INKS,
+  dark:    DARK_INKS,  slate: DARK_INKS, accent: DARK_INKS,
+};
+const composed = new Set();
+for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+  const src = stripComments(read(f) || "");
+  for (const tag of src.matchAll(/<Section\b[^>]*>/g)) {
+    const t = tag[0].match(/tone\s*=\s*["'`](\w+)["'`]/);
+    const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
+    if (!h) continue;                       // no hue -- the tone matrix already covers it
+    const tone = t ? t[1] : "paper";        // no tone -- the default light register
+    composed.add(`${tone}|${h[1]}`);
+  }
+}
+for (const cell of [...composed].sort()) {
+  const [tone, n] = cell.split("|");
+  const hue = `--hue-${n}`;
+  if (!T[hue]) continue;                    // undeclared slot is inert (S4.6)
+  for (const ink of TONE_INKS[tone] || LIGHT_INKS) if (T[ink]) NORMAL_PAIRS.push([ink, hue]);
+  if (T[`${hue}-ink`]) NORMAL_PAIRS.push([`${hue}-ink`, hue]);
+}
+if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
+
 // Accent-as-BACKGROUND text pair (on-dark body colour on the accent tone) --
 // large-display-only by S2.3/S4.3, so the threshold is 3.0 (NOT 4.5). On the accent
 // tone, accent text falls back to the on-dark BODY colour only (S4.3), so --on-dark is
@@ -312,11 +353,14 @@ for (const f of copyFiles) {
 if (emDash) bad(`${emDash} em-dash(es) in rendered copy (literal or entity): ${emFiles.join(", ")}`);
 else ok("no em-dashes in rendered copy (literal or entity; comments exempt, S9.4)");
 
+// Dutch stems: the list is half Dutch already, but `best` was English-only, so `beste`
+// (the ordinary Dutch superlative) passed a gate whose whole job is superlatives.
+// Found on zuidgeluid.be 2026-08-02 by a second reader, not by the checker.
 // "best" is the noisy one: "as best we reasonably can" is a liability hedge and
 // "best practice" is a term of art -- neither is a marketing claim, and both were failing
 // this gate. Excluded by context rather than dropped from the list, so promotional uses
 // ("the best CRM") still surface.
-const SUPER = /(?<!\bas\s)\b(uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|best|finest|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
+const SUPER = /(?<!\bas\s)\b(uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|best|beste|finest|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
 const superHits = [];
 for (const f of copyFiles) {
   const body = stripComments(read(f) || "");
