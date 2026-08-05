@@ -25,6 +25,12 @@
 // Zero dependencies. Node 18+.  Usage:
 //   node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--base <ref>] [--ci]
 //   exit 0 = all hard checks pass | exit 1 = a hard check failed
+//   exit 2 = INVOCATION error (repoRoot is not a directory). Distinct from 1 on purpose:
+//            a run that never looked at the tree has not measured it, and must not be
+//            readable as nine findings about it.
+//
+//   repoRoot is optional and defaults to "." -- but it must be a DIRECTORY. It is taken
+//   from the first argv that is neither a flag nor a flag's VALUE.
 //
 // --seed     authoritative spine source (a checked-out site-seed repo, or a dir
 //            holding the canonical spine files). REQUIRED to prove spine integrity.
@@ -38,8 +44,27 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
-const ROOT = args.find((a) => !a.startsWith("--")) || ".";
+// Flags that CONSUME the next argv. Without this set a flag's VALUE looks like a bare
+// positional, and the first bare positional is repoRoot -- so
+// `node verify.mjs --charter zuidgeluid-site-charter.md` rooted the entire check at the
+// CHARTER FILE, every path below it missed, and the run reported NINE confident FAILs on
+// a clean tree. CI was never exposed (it passes `.` first); the documented local
+// invocation was. Raised by zuidgeluid-site, 2026-08-04.
+const VALUE_FLAGS = new Set(["--seed", "--charter", "--base"]);
+const consumesNext = new Set();
+args.forEach((a, i) => { if (VALUE_FLAGS.has(a)) consumesNext.add(i + 1); });
+const ROOT = args.find((a, i) => !a.startsWith("--") && !consumesNext.has(i)) ?? ".";
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+
+// The argv fix alone would still let a typo'd or non-existent path through, and the
+// failure mode is the dangerous one: a gate that cannot see the tree reports FAILs about
+// it in exactly the same shape as a gate that can. Refusing to run is the only honest
+// answer, so this is an invocation error (exit 2), not a finding (exit 1).
+if (!existsSync(ROOT) || !statSync(ROOT).isDirectory()) {
+  console.error(`verify.mjs: repoRoot ${JSON.stringify(ROOT)} is not a directory -- refusing to run.`);
+  console.error("Usage: node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--base <ref>] [--ci]");
+  process.exit(2);
+}
 const SEED = flag("--seed");
 const CHARTER = flag("--charter");
 const BASE = flag("--base");
