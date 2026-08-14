@@ -70,6 +70,16 @@ const CHARTER = flag("--charter");
 const BASE = flag("--base");
 const CI = args.includes("--ci") || process.env.CI === "true";
 
+// EXTRA SPINE PATHS -- files declared SEED-SPINE that live OUTSIDE the spine layer's two
+// directories. The baseline was `src/components/spine/**` + `spine.css` and nothing else,
+// so a file that is spine by classification but not by location could not be covered no
+// matter what canon declared. `src/router.tsx` is the first: 18 lines of TanStack Start
+// router wiring with no per-site surface at all, declared SEED-SPINE in
+// as-site-seed-spine.md's file manifest (site-contract 1.8.19). Add a path here ONLY after
+// canon declares it, never the other way round -- a baseline that leads the declaration is
+// a gate enforcing a rule no document states.
+const EXTRA_SPINE = ["src/router.tsx"];
+
 const P = {
   tokens: join(ROOT, "src/styles/tokens.css"),
   spineCss: join(ROOT, "src/styles/spine.css"),
@@ -132,6 +142,10 @@ function spineFilesUnder(rootDir) {
   for (const f of walk(compDir, null)) map[relative(rootDir, f).replace(/\\/g, "/")] = sha(readFileSync(f));
   const css = join(rootDir, "src/styles/spine.css");
   if (existsSync(css)) map["src/styles/spine.css"] = sha(readFileSync(css));
+  for (const rel of EXTRA_SPINE) {
+    const p = join(rootDir, rel);
+    if (existsSync(p)) map[rel] = sha(readFileSync(p));
+  }
   return map;
 }
 if (SEED && existsSync(SEED)) {
@@ -156,14 +170,18 @@ if (base) {
   try {
     const changed = execSync(`git diff --name-only ${base}...HEAD`, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
       .toString().trim().split("\n").filter(Boolean);
-    const spineTouched = changed.filter((f) => f.includes("src/components/spine/") || f.endsWith("src/styles/spine.css"));
+    const spineTouched = changed.filter((f) => f.includes("src/components/spine/") || f.endsWith("src/styles/spine.css") || EXTRA_SPINE.some((x) => f.replace(/\\/g, "/").endsWith(x)));
     if (spineTouched.length) {
       // #150: a SANCTIONED Trigger-1 resync is exactly "spine changed vs parent", and [1b]
       // proves byte-identity with the sha-pinned seed in this same run. Rule: [1a] passes iff
       // spine is unchanged vs the parent OR every touched spine file is byte-identical to the
       // pinned seed (definitionally a resync, not a local edit). A touched file matching
       // neither parent nor seed stays a hard FAIL. No new inputs; no weakening of the guard.
-      const rel = (f) => f.replace(/\\/g, "/").replace(/^.*?(src\/(components\/spine|styles)\/)/, "$1");
+      const rel = (f) => {
+        const n = f.replace(/\\/g, "/");
+        const hit = EXTRA_SPINE.find((x) => n.endsWith(x));
+        return hit || n.replace(/^.*?(src\/(components\/spine|styles)\/)/, "$1");
+      };
       const notSeed = seedSpine
         ? spineTouched.filter((f) => {
             const r = rel(f);
@@ -187,7 +205,7 @@ if (seedSpine) {
     if (!(rel in built)) missing.push(rel);
     else if (built[rel] !== h) mism.push(rel);
   }
-  for (const rel of Object.keys(built)) if (!(rel in seedSpine)) extra.push(rel);
+  for (const rel of Object.keys(built)) if (!(rel in seedSpine) && !EXTRA_SPINE.includes(rel)) extra.push(rel);
   if (mism.length) bad(`spine differs from seed (edited per site -- S3.2 violation): ${mism.join(", ")}`);
   if (missing.length) bad(`spine files missing from build: ${missing.join(", ")}`);
   if (extra.length) bad(`extra files under spine/ not in seed (stray spine file): ${extra.join(", ")}`);
