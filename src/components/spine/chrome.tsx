@@ -1,13 +1,29 @@
 // spine/chrome.tsx — SiteHeader, SiteFooter, SkipLink.  SPINE: never edited per site.
 // Content comes from site.config.ts; active nav state comes from the current path.
 import * as React from "react";
+// C4c (S7.2 / A9): the skip link is the one piece of chrome with rendered COPY in it, so it
+// has to be in the document's language. The locale already exists per site as privacy.lang;
+// what was missing was the wiring, so the spine reads it here rather than every site passing
+// it at every call site. This is the ONE import the spine layer takes from src/content/, and
+// it is deliberate: site.config's only import from here is `import type`, which erases at
+// build, so the cycle is type-only and there is no runtime edge back. If that ever stops
+// being an `import type`, this becomes a real cycle and the wiring has to move.
+import { privacy } from "../../content/site.config";
 
 export type NavItem = { label: string; href: string; children?: { label: string; href: string }[] };
 export type FooterColumn = { title: string; links: { label: string; href: string }[] };
 export type Social = { label: string; href: string; icon: React.ReactNode };
 
-export function SkipLink() {
-  return <a className="skip" href="#main">Skip to content</a>;
+// The fleet's two languages, matching legal.tsx. An undeclared or unknown locale falls back
+// to English, which is the state every site is in today, so no site regresses by omission.
+const SKIP_TO_CONTENT: Record<string, string> = {
+  nl: "Naar de inhoud",
+  en: "Skip to content",
+};
+
+export function SkipLink({ lang }: { lang?: string } = {}) {
+  const locale = lang ?? (privacy as { lang?: string }).lang ?? "en";
+  return <a className="skip" href="#main">{SKIP_TO_CONTENT[locale] ?? SKIP_TO_CONTENT.en}</a>;
 }
 
 function useScrolled() {
