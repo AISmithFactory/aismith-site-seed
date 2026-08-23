@@ -253,9 +253,18 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .event-card h3 { font-family: var(--font-display); font-weight: 800; font-size: 22px; margin-bottom: 6px; }
 .event-card .det { font-size: 14px; color: var(--text-soft); font-weight: 500; line-height: 1.45; }
 
+/* S2.3 / G1: --sec-soft is the ink for the SECTION's ground, so only a soft-ink selector
+   sitting DIRECTLY on that ground may read it. Measured 2026-08-23: of the nine content-level
+   soft-ink selectors in this file, exactly TWO do -- `.stat .lbl` below and `.crumb a` at the
+   breadcrumb block. The other seven (`.media-card .loc`/`p`, `.tier-card .price small`/`li`,
+   `.event-card .det`, `.info-card .v`, `.form-card label`) sit inside components that set
+   their OWN ground, so widening them keys card ink to the section and regresses: `.info-card .v`
+   inside a [data-tone="dark"] Section goes from 7.11 to 1.07. Card ink following the card's
+   ground is a separate and larger question with its own row. DO NOT widen this to the other
+   seven without it. */
 .stat .num { font-family: var(--font-display); font-weight: 800; font-size: clamp(48px, 6vw, 76px); line-height: .92; }
 .stat .num .plus { color: var(--accent); }
-.stat .lbl { font-weight: 600; font-size: 14.5px; margin-top: 6px; max-width: 22ch; color: var(--text-soft); }
+.stat .lbl { font-weight: 600; font-size: 14.5px; margin-top: 6px; max-width: 22ch; color: var(--sec-soft, var(--text-soft)); }
 
 .info-card { background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius); padding: 16px 18px; }
 .info-card .k { font-family: var(--font-display); font-weight: 800; font-size: 15px; color: var(--accent-text); margin-bottom: 4px; }
@@ -319,7 +328,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .crumb { display: inline-flex; align-items: center; gap: 7px; font-weight: 800;
   font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase;
   color: var(--accent-text); }
-.crumb a { color: var(--text-soft); }
+.crumb a { color: var(--sec-soft, var(--text-soft)); }
 .crumb a:hover { color: var(--accent); }
 [data-tone="dark"] .crumb, [data-tone="slate"] .crumb { color: var(--accent-on-dark); }
 [data-tone="dark"] .crumb a, [data-tone="slate"] .crumb a { color: var(--on-dark-soft); }
