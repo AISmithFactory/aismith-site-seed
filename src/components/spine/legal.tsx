@@ -1,7 +1,11 @@
 // spine/legal.tsx — CORE legal notices (S7.4). Every site ships a privacy notice.
 // GDPR structure + standard clauses authored ONCE here (fleet-wide, consistent and correct);
 // per-site facts (controller, enabled subprocessors, dates) arrive as props from site.config,
-// filled from the manifest `legal` block. Bilingual NL + EN via `lang` (the fleet's two
+// filled from the manifest `legal` block. What the site actually SHIPS is a prop too:
+// `newsletter` gates the newsletter clause and its consent basis, `withName` matches the
+// clause to NewsletterForm's shape (forms.tsx defaults withName={true} and posts data.name),
+// `mapsEmbed` gates the map clause and its consent basis. Defaults describe the fleet default
+// site: a newsletter on the name+email form, no map. Bilingual NL + EN via `lang` (the fleet's two
 // languages); the per-site subprocessor `purpose` strings are authored in the site's language.
 // Tokens only via .legal classes; no colour decision here (S2.2).
 import * as React from "react";
@@ -18,14 +22,29 @@ const DPA: Record<Lang, { name: string; url: string }> = {
 
 export function PrivacyNotice(
   { controller, subprocessors = [], effectiveDate, retention, mapsEmbed = false,
-    dpoEmail, lang = "nl", dpaName, dpaUrl }:
+    newsletter = true, withName = true, dpoEmail, lang = "nl", dpaName, dpaUrl }:
   { controller: Controller; subprocessors?: Subprocessor[]; effectiveDate: string;
-    retention?: React.ReactNode; mapsEmbed?: boolean; dpoEmail?: string; lang?: Lang;
+    retention?: React.ReactNode; mapsEmbed?: boolean; newsletter?: boolean;
+    withName?: boolean; dpoEmail?: string; lang?: Lang;
     dpaName?: string; dpaUrl?: string }
 ) {
   const rightsTo = dpoEmail ?? controller.email;
   const dpa = { name: dpaName ?? DPA[lang].name, url: dpaUrl ?? DPA[lang].url };
   const mailto = (e: string) => <a href={`mailto:${e}`}>{e}</a>;
+  // S7.4a: the legal basis names the consent sources this site ACTUALLY has. A notice
+  // that lists a newsletter or a map the site does not ship overstates its processing,
+  // and one that omits a field the default form posts understates it. Both are defects
+  // and this site has shipped each of them.
+  const consent: Record<Lang, string[]> = {
+    nl: [...(newsletter ? ["nieuwsbrief"] : []), ...(mapsEmbed ? ["kaart"] : [])],
+    en: [...(newsletter ? ["newsletter"] : []), ...(mapsEmbed ? ["map"] : [])],
+  };
+  const basisNl = consent.nl.length
+    ? `We verwerken deze gegevens op basis van je toestemming (${consent.nl.join(", ")}), de uitvoering van je verzoek (contact) en ons gerechtvaardigd belang om de site veilig te laten werken.`
+    : "We verwerken deze gegevens op basis van de uitvoering van je verzoek (contact) en ons gerechtvaardigd belang om de site veilig te laten werken.";
+  const basisEn = consent.en.length
+    ? `We process this data on the basis of your consent (${consent.en.join(", ")}), the performance of your request (contact), and our legitimate interest in keeping the site secure.`
+    : "We process this data on the basis of the performance of your request (contact) and our legitimate interest in keeping the site secure.";
 
   const T: Record<Lang, any> = {
     nl: {
@@ -39,11 +58,11 @@ export function PrivacyNotice(
         {dpoEmail ? <> Voor privacyvragen: {mailto(dpoEmail)}.</> : null}</>),
       dataT: "Welke gegevens we verwerken en waarom",
       dContact: <><strong>Contact.</strong> Stuur je ons een bericht, dan verwerken we je naam, e-mailadres en de inhoud van je bericht om je vraag te beantwoorden.</>,
-      dNews: <><strong>Nieuwsbrief.</strong> Schrijf je je in, dan verwerken we je e-mailadres om je de nieuwsbrief te sturen. Je kan je op elk moment uitschrijven.</>,
+      dNews: <><strong>Nieuwsbrief.</strong> Schrijf je je in, dan verwerken we je {withName ? "naam en e-mailadres" : "e-mailadres"} om je de nieuwsbrief te sturen. Je kan je op elk moment uitschrijven.</>,
       dLogs: <><strong>Technische logs.</strong> Onze hostingpartij houdt beperkte serverlogs bij (waaronder je IP-adres) voor de beveiliging en goede werking van de site.</>,
       dMap: <><strong>Kaart.</strong> Onze kaart laadt pas wanneer je er zelf op klikt. Vanaf dat moment wordt je IP-adres aan Google doorgegeven om de kaart te tonen.</>,
       basisT: "Rechtsgrond",
-      basis: "We verwerken deze gegevens op basis van je toestemming (nieuwsbrief, kaart), de uitvoering van je verzoek (contact) en ons gerechtvaardigd belang om de site veilig te laten werken.",
+      basis: basisNl,
       shareT: "Met wie we gegevens delen",
       shareNone: "We delen je gegevens niet met derden, behalve waar nodig voor de werking van de site.",
       neverSell: "We verkopen je gegevens nooit.",
@@ -69,11 +88,11 @@ export function PrivacyNotice(
         {dpoEmail ? <> For privacy questions: {mailto(dpoEmail)}.</> : null}</>),
       dataT: "What data we process and why",
       dContact: <><strong>Contact.</strong> If you send us a message, we process your name, email address and the content of your message to answer your question.</>,
-      dNews: <><strong>Newsletter.</strong> If you subscribe, we process your email address to send you the newsletter. You can unsubscribe at any time.</>,
+      dNews: <><strong>Newsletter.</strong> If you subscribe, we process your {withName ? "name and email address" : "email address"} to send you the newsletter. You can unsubscribe at any time.</>,
       dLogs: <><strong>Technical logs.</strong> Our hosting provider keeps limited server logs (including your IP address) for the security and proper operation of the site.</>,
       dMap: <><strong>Map.</strong> Our map only loads when you click it. From that moment your IP address is sent to Google to show the map.</>,
       basisT: "Legal basis",
-      basis: "We process this data on the basis of your consent (newsletter, map), the performance of your request (contact), and our legitimate interest in keeping the site secure.",
+      basis: basisEn,
       shareT: "Who we share data with",
       shareNone: "We do not share your data with third parties, except where needed to operate the site.",
       neverSell: "We never sell your data.",
@@ -102,7 +121,7 @@ export function PrivacyNotice(
           <h2>{t.dataT}</h2>
           <ul>
             <li>{t.dContact}</li>
-            <li>{t.dNews}</li>
+            {newsletter ? <li>{t.dNews}</li> : null}
             <li>{t.dLogs}</li>
             {mapsEmbed ? <li>{t.dMap}</li> : null}
           </ul>
