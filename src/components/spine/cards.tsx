@@ -21,9 +21,9 @@ export function MediaCard(
         {stamp && stampPlacement === "seam" && <span className="stamp stamp--seam" aria-hidden="true">{stamp}</span>}
         {pill && pillPlacement === "meta" && <div className="meta"><span className="pill pill--meta">{pill}</span></div>}
         {category && <span className="cat">{category}</span>}
-        <h3>{title}</h3>
+        <h3 className="card-title">{title}</h3>
         {loc && <p className="loc">{loc}</p>}
-        {body && <p>{body}</p>}
+        {body && <p className="card-text">{body}</p>}
         {href && <span className="btn-ghost">{more} &rarr;</span>}
       </div>
     </Tag>
@@ -63,7 +63,7 @@ export function EventCard(
       )}
       <div>
         <span className="when">{when}</span>
-        <h3>{title}</h3>
+        <h3 className="card-title">{title}</h3>
         {details && <p className="det">{details}</p>}
         {href && <a className="btn-ghost" href={href}>Details &rarr;</a>}
       </div>
