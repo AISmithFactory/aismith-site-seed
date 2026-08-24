@@ -66,6 +66,25 @@ if (!existsSync(ROOT) || !statSync(ROOT).isDirectory()) {
   process.exit(2);
 }
 const SEED = flag("--seed");
+
+// THE SEED'S OWN ROLE, added 2026-08-24. ONE TEMPLATE SERVES TWO ROLES AND ONLY ONE OF
+// THEM HAS A BASELINE. A site verifies against the seed; the seed IS the baseline and has
+// nothing external to verify against, so NO value of SEED_REF lets a seed PR change a
+// spine file and then check it. Pointing `.seed` at the PR head would make [1a] and [1b]
+// pass by construction, which is a check that cannot fail and therefore cannot find.
+//
+// So where the repo under test IS the seed, the two spine sections report REVIEW with the
+// reason named: never PASS, and never FAIL. review() is the existing severity for "a human
+// should look", which is exactly what a spine change with no mechanical baseline needs.
+// Nothing else changes: [0] still resolves the baseline, and every other section still
+// runs and still gates, which is why SEED_REF must stay set to something resolvable.
+//
+// THE SIGNAL IS THE WORKFLOW'S OWN ENV, so this costs no new argument and no change to the
+// stamped fill-in template: SEED_REPO is declared at workflow level and GITHUB_REPOSITORY
+// is set by Actions, so both reach this process. Outside CI neither is set, this is false,
+// and a local run behaves exactly as it did before.
+const SEED_ROLE = !!(process.env.GITHUB_REPOSITORY && process.env.SEED_REPO &&
+  process.env.GITHUB_REPOSITORY.trim().toLowerCase() === process.env.SEED_REPO.trim().toLowerCase());
 const CHARTER = flag("--charter");
 const BASE = flag("--base");
 const CI = args.includes("--ci") || process.env.CI === "true";
@@ -189,7 +208,8 @@ if (base) {
             return !(r in seedSpine) || !existsSync(p) || sha(readFileSync(p)) !== seedSpine[r];
           })
         : spineTouched; // no seed baseline resolvable: keep the old fail-closed behaviour
-      if (notSeed.length) bad(`spine files changed vs ${base} and differ from the pinned seed (local edit, not a resync): ${notSeed.join(", ")}`);
+      if (SEED_ROLE) review(`spine changed vs ${base} in the SEED repo itself (${spineTouched.length} file(s)): there is no external baseline for this repo, so [1a] is NOT DECIDABLE here and is not reported as a pass. A human reviews the change: ${spineTouched.join(", ")}`);
+      else if (notSeed.length) bad(`spine files changed vs ${base} and differ from the pinned seed (local edit, not a resync): ${notSeed.join(", ")}`);
       else ok(`spine changed vs ${base} but byte-identical to the pinned seed (sanctioned resync, ${spineTouched.length} files)`);
     }
     else ok(`git diff vs ${base}: no spine path changed (${changed.length} files touched)`);
@@ -198,7 +218,9 @@ if (base) {
   (CI ? bad : soft)("no git base resolvable (pass --base <ref>); relying on static + hash checks");
 }
 // (b) spine byte-for-byte vs the seed baseline (recursive). Auditor hardening.
-if (seedSpine) {
+if (seedSpine && SEED_ROLE) {
+  review(`spine byte-for-byte vs seed is NOT DECIDABLE in the SEED repo: the baseline resolved is the pre-PR state of this same repo, so a correct spine change reads here as a mismatch. Not a pass and not a failure; the change is reviewed by a human.`);
+} else if (seedSpine) {
   const built = spineFilesUnder(ROOT);
   const mism = [], missing = [], extra = [];
   for (const [rel, h] of Object.entries(seedSpine)) {
