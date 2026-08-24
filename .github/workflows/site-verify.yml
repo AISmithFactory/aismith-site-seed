@@ -63,7 +63,19 @@ env:
   # MUST be the FULL 40-character sha, never an abbreviated one: actions/checkout
   # fetches the ref directly and a short sha fails with "git failed with exit code 1".
   # Never a moving ref such as `main` (site-contract 1.8.6).
-  SEED_REF: main   # the seed IS the baseline; it verifies against its own HEAD
+  # THIS REPO IS THE SEED, and that is the one case the block above does not cover. Those
+  # rules are written for a SITE, whose baseline is this repo at the sha its charter pins.
+  # The seed has NO external baseline at any ref, so no value here makes the two spine
+  # sections decidable: pointing this at the PR head would make them pass by construction,
+  # which is a check that cannot fail and therefore cannot find. `agents/site/verify.mjs`
+  # reports [1a] and [1b] as REVIEW, never PASS and never FAIL, when GITHUB_REPOSITORY
+  # equals SEED_REPO. A human reviews a spine change here; the gate cannot.
+  #
+  # SO THIS VALUE IS NOT A PIN AND NOTHING READS IT AS ONE. It only has to RESOLVE, so that
+  # the checkout step below SUCCEEDS and sections 2 to 9 still gate. Leaving it empty fails
+  # that checkout, and the Section-6 step is guarded on the checkout succeeding, so an empty
+  # value would skip the ENTIRE gate while the job still reported green.
+  SEED_REF: main   # NOT a pin. See the note directly above: this repo is the seed.
   # The charter to reconcile routes against (bidirectional). Leave as-is if the site
   # ships <slug>-site-charter.md at the repo root; clear the --charter arg below if not.
   CHARTER: "aismith-site-charter.md"   # the seed ships its own charter at the repo root
