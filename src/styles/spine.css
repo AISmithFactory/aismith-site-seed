@@ -101,23 +101,29 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 /* ---- Section tone map (moved here from tokens.css, S2.2) -------------------
    Spine-invariant: fixed tone enum x fixed token names, identical on every site, no literal
    colour -- so it lives in the frozen layer and the per-site tokens.css stays variables-only. */
-[data-tone="paper"]   { --sec-bg: var(--bg);        --sec-text: var(--text);    --sec-soft: var(--text-soft); }
-[data-tone="alt"]     { --sec-bg: var(--bg-alt);    --sec-text: var(--text);    --sec-soft: var(--text-soft); }
-[data-tone="surface"] { --sec-bg: var(--surface);   --sec-text: var(--text);    --sec-soft: var(--text-soft); }
-[data-tone="dark"]    { --sec-bg: var(--dark);      --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); }
-[data-tone="slate"]   { --sec-bg: var(--dark-alt);  --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); }
-[data-tone="accent"]  { --sec-bg: var(--accent);    --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); }
+[data-tone="paper"]   { --sec-bg: var(--bg);        --sec-text: var(--text);    --sec-soft: var(--text-soft);
+                        --tone-bg: var(--bg); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+[data-tone="alt"]     { --sec-bg: var(--bg-alt);    --sec-text: var(--text);    --sec-soft: var(--text-soft);
+                        --tone-bg: var(--bg-alt); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+[data-tone="surface"] { --sec-bg: var(--surface);   --sec-text: var(--text);    --sec-soft: var(--text-soft);
+                        --tone-bg: var(--surface); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+[data-tone="dark"]    { --sec-bg: var(--dark);      --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
+                        --tone-bg: var(--dark); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
+[data-tone="slate"]   { --sec-bg: var(--dark-alt);  --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
+                        --tone-bg: var(--dark-alt); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
+[data-tone="accent"]  { --sec-bg: var(--accent);    --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
+                        --tone-bg: var(--accent); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
 
 /* ---- S4.6 optional hue slots — secondary-palette sections -----------------
    A SKIN that declares --hue-N (+ --hue-N-ink, optional --hue-N-soft) in
    tokens.css re-grounds any [data-hue="N"] section in that hue; undeclared
    slots fall back to the tone (tone = register, hue = brand family).
    Every declared --hue-N / --hue-N-ink pair must clear WCAG AA (S2). */
-[data-hue="1"] { --sec-bg: var(--hue-1, var(--sec-bg)); --sec-text: var(--hue-1-ink, var(--sec-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="2"] { --sec-bg: var(--hue-2, var(--sec-bg)); --sec-text: var(--hue-2-ink, var(--sec-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="3"] { --sec-bg: var(--hue-3, var(--sec-bg)); --sec-text: var(--hue-3-ink, var(--sec-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="4"] { --sec-bg: var(--hue-4, var(--sec-bg)); --sec-text: var(--hue-4-ink, var(--sec-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="5"] { --sec-bg: var(--hue-5, var(--sec-bg)); --sec-text: var(--hue-5-ink, var(--sec-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--sec-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="1"] { --sec-bg: var(--hue-1, var(--tone-bg)); --sec-text: var(--hue-1-ink, var(--tone-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="2"] { --sec-bg: var(--hue-2, var(--tone-bg)); --sec-text: var(--hue-2-ink, var(--tone-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="3"] { --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="4"] { --sec-bg: var(--hue-4, var(--tone-bg)); --sec-text: var(--hue-4-ink, var(--tone-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="5"] { --sec-bg: var(--hue-5, var(--tone-bg)); --sec-text: var(--hue-5-ink, var(--tone-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 
 /* ---- Section fx layer (deco module behind content) ------------------------*/
 .section--fx { position: relative; overflow: hidden; }
