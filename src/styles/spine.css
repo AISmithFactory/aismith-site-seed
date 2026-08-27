@@ -65,9 +65,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 [data-tone="dark"] .eyebrow, [data-tone="slate"] .eyebrow { color: var(--accent-on-dark); }
 [data-tone="accent"] .eyebrow { color: var(--on-dark); }
 .lead { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.55; font-weight: 500; max-width: 54ch; }
-.em { color: var(--accent-text); }   /* accent AS TEXT on light → AA-safe (S2.3) */
-[data-tone="dark"] .em, [data-tone="slate"] .em { color: var(--accent-on-dark); }
-[data-tone="accent"] .em { color: var(--on-dark); }
+.em { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }   /* accent ink: hue, then tone, then the light default (S2.3 / S4.6) */
 /* Hue-as-TEXT variants (#122 item 6c, operator-ruled IN 2026-07-30): colour a word in
    the brand's hue family on a LIGHT ground. The text twin of the S4.6 background slots,
    by the --accent/--accent-text precedent: raw hue fills fail AA as text, so a skin
@@ -97,33 +95,52 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .price      { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; }
 .num        { font-family: var(--font-display); font-weight: 800; font-size: clamp(48px, 6vw, 76px); line-height: .92; }
 .lbl        { font-weight: 600; font-size: 14.5px; max-width: 22ch; }
+/* The seven roles the S3.2a sweep of 2026-08-27 measured as owed (worker-1, session
+   local_3b1ccee9, at seed f3904f1d, zuidgeluid-site b860a20a, aismith-site 7d612412;
+   plan-site-1824-2026-08-27.md v1.2 M2). Each is TYPE ONLY on the same terms as the eight
+   above: the ground, the ink and the box stay with whatever composes the role. Values are
+   taken from the cited site source; where two sites drift on a number the LIVE NAMED
+   component wins and the drift is an M6 conversion question, not a second class. None of
+   the seven is carried by a seed component today (the sweep measured seed inline type at
+   ZERO), so they land here unreferenced and the sites convert to them at M6. */
+.sec-quote  { font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(19px, 2.1vw, 27px); line-height: 1.26; letter-spacing: -.015em; }
+.namelist   { font-family: var(--font-display); font-weight: 600; font-size: 15px; line-height: 1.85; }
+.galcredit  { font-weight: 700; font-size: 13px; }
+.galcredit a { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.display-line { font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(28px, 4vw, 52px); line-height: 1.02; letter-spacing: -.02em; }
+.kicker     { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px;
+  letter-spacing: .06em; text-transform: uppercase; }
+.tag        { font-weight: 500; font-size: 13px; }
+.num-sm     { font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: 1; }
 
 /* ---- Section tone map (moved here from tokens.css, S2.2) -------------------
    Spine-invariant: fixed tone enum x fixed token names, identical on every site, no literal
    colour -- so it lives in the frozen layer and the per-site tokens.css stays variables-only. */
 [data-tone="paper"]   { --sec-bg: var(--bg);        --sec-text: var(--text);    --sec-soft: var(--text-soft);
-                        --tone-bg: var(--bg); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+                        --tone-bg: var(--bg); --tone-text: var(--text); --tone-soft: var(--text-soft); --tone-accent: var(--accent-text); }
 [data-tone="alt"]     { --sec-bg: var(--bg-alt);    --sec-text: var(--text);    --sec-soft: var(--text-soft);
-                        --tone-bg: var(--bg-alt); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+                        --tone-bg: var(--bg-alt); --tone-text: var(--text); --tone-soft: var(--text-soft); --tone-accent: var(--accent-text); }
 [data-tone="surface"] { --sec-bg: var(--surface);   --sec-text: var(--text);    --sec-soft: var(--text-soft);
-                        --tone-bg: var(--surface); --tone-text: var(--text); --tone-soft: var(--text-soft); }
+                        --tone-bg: var(--surface); --tone-text: var(--text); --tone-soft: var(--text-soft); --tone-accent: var(--accent-text); }
 [data-tone="dark"]    { --sec-bg: var(--dark);      --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
-                        --tone-bg: var(--dark); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
+                        --tone-bg: var(--dark); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); --tone-accent: var(--accent-on-dark); }
 [data-tone="slate"]   { --sec-bg: var(--dark-alt);  --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
-                        --tone-bg: var(--dark-alt); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
+                        --tone-bg: var(--dark-alt); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); --tone-accent: var(--accent-on-dark); }
 [data-tone="accent"]  { --sec-bg: var(--accent);    --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft);
-                        --tone-bg: var(--accent); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); }
+                        --tone-bg: var(--accent); --tone-text: var(--on-dark); --tone-soft: var(--on-dark-soft); --tone-accent: var(--on-dark); }
 
 /* ---- S4.6 optional hue slots — secondary-palette sections -----------------
    A SKIN that declares --hue-N (+ --hue-N-ink, optional --hue-N-soft) in
    tokens.css re-grounds any [data-hue="N"] section in that hue; undeclared
    slots fall back to the tone (tone = register, hue = brand family).
    Every declared --hue-N / --hue-N-ink pair must clear WCAG AA (S2). */
-[data-hue="1"] { --sec-bg: var(--hue-1, var(--tone-bg)); --sec-text: var(--hue-1-ink, var(--tone-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="2"] { --sec-bg: var(--hue-2, var(--tone-bg)); --sec-text: var(--hue-2-ink, var(--tone-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="3"] { --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="4"] { --sec-bg: var(--hue-4, var(--tone-bg)); --sec-text: var(--hue-4-ink, var(--tone-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
-[data-hue="5"] { --sec-bg: var(--hue-5, var(--tone-bg)); --sec-text: var(--hue-5-ink, var(--tone-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="1"] { --sec-accent: var(--hue-1-accent, var(--tone-accent)); --sec-bg: var(--hue-1, var(--tone-bg)); --sec-text: var(--hue-1-ink, var(--tone-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="2"] { --sec-accent: var(--hue-2-accent, var(--tone-accent)); --sec-bg: var(--hue-2, var(--tone-bg)); --sec-text: var(--hue-2-ink, var(--tone-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="3"] { --sec-accent: var(--hue-3-accent, var(--tone-accent)); --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="4"] { --sec-accent: var(--hue-4-accent, var(--tone-accent)); --sec-bg: var(--hue-4, var(--tone-bg)); --sec-text: var(--hue-4-ink, var(--tone-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="5"] { --sec-accent: var(--hue-5-accent, var(--tone-accent)); --sec-bg: var(--hue-5, var(--tone-bg)); --sec-text: var(--hue-5-ink, var(--tone-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 
 /* ---- Section fx layer (deco module behind content) ------------------------*/
 .section--fx { position: relative; overflow: hidden; }
@@ -149,9 +166,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .btn-line { background: transparent; color: var(--sec-text, var(--text)); border: 2px solid var(--sec-text, var(--text)); }
 .btn-line:hover { background: var(--sec-text, var(--text)); color: var(--sec-bg, var(--bg)); }
 .btn-ghost { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px;
-  color: var(--accent-text); border-bottom: 2px solid transparent; padding-bottom: 1px; }
-[data-tone="dark"] .btn-ghost, [data-tone="slate"] .btn-ghost { color: var(--accent-on-dark); }
-[data-tone="accent"] .btn-ghost { color: var(--on-dark); }
+  color: var(--sec-accent, var(--tone-accent, var(--accent-text))); border-bottom: 2px solid transparent; padding-bottom: 1px; }
 .btn-ghost:hover { border-color: currentColor; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -347,10 +362,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 /* ---- breadcrumb (core, #141 item 6) ---------------------------------------*/
 .crumb { display: inline-flex; align-items: center; gap: 7px; font-weight: 800;
   font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--accent-text); }
+  color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
 .crumb a { color: var(--sec-soft, var(--text-soft)); }
 .crumb a:hover { color: var(--accent); }
-[data-tone="dark"] .crumb, [data-tone="slate"] .crumb { color: var(--accent-on-dark); }
 [data-tone="dark"] .crumb a, [data-tone="slate"] .crumb a { color: var(--on-dark-soft); }
 
 /* ---- responsive -----------------------------------------------------------*/

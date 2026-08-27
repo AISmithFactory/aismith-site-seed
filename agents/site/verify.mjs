@@ -314,26 +314,57 @@ const T = parseTokens(stripComments(tokens || ""));
 // dark-register ink on a light hue ground -- a pair that appeared in no list, because
 // S2.3 owned text x tone, S4.6 owned hue x hue-ink, and neither owned the product.
 // Enumerating cannot express a cross-product; discovering the declared hues can.
-const TONE_GROUNDS = ["--bg", "--bg-alt", "--surface", "--dark", "--slate"];
-const LIGHT_INKS = ["--text", "--text-soft", "--accent-text"];
-const DARK_INKS  = ["--on-dark", "--on-dark-soft", "--accent-on-dark"];
-const NORMAL_PAIRS = [
-  ["--text", "--bg"], ["--text", "--bg-alt"], ["--text", "--surface"],
-  ["--text-soft", "--bg"], ["--text-soft", "--bg-alt"], ["--text-soft", "--surface"],
-  ["--on-dark", "--dark"], ["--on-dark", "--slate"], ["--on-dark-soft", "--dark"], ["--on-dark-soft", "--slate"],
-  ["--accent-text", "--bg"], ["--accent-text", "--bg-alt"], ["--accent-text", "--surface"],
-  ["--accent-on-dark", "--dark"], ["--accent-on-dark", "--slate"],
-];
+// DERIVED FROM spine.css's [data-tone=...] BLOCKS, not enumerated (site-contract 1.8.24,
+// plan-site-1824-2026-08-27.md M3). The tone map is the thing that decides which ink lands
+// on which ground, so it is the operand; a second copy of it here is a copy that decays.
+// It already had: TONE_GROUNDS named `--slate`, which NO tokens.css declares (the map says
+// `--dark-alt`), so the three slate pairs it listed were silently skipped by the `if (T[bg])`
+// guard downstream and the checker reported OK on a matrix it was not checking.
+//
+// THE PARSER ANCHORS ON THE OPENING BRACE. Contract 1.8.23's E0 split every [data-tone]
+// block across two lines, so a single-line pattern no longer matches: take everything from
+// the brace to the closing brace and read the declarations out of that.
+//
+// THE ACCENT TONE IS DERIVED BUT EXCLUDED FROM THE 4.5 LIST, and that is not a scope
+// judgement: S2.3/S4.3 make accent-as-background large-display-only, and the block further
+// down already checks --on-dark on --accent at the 3.0 threshold. Including it here would
+// assert 4.5 on a pair the standard puts at 3.0.
+const TONE_BLOCKS = (() => {
+  const css = stripComments(read(P.spineCss) || "");
+  const out = {};
+  for (const m of css.matchAll(/\[data-tone=["']?(\w+)["']?\]\s*\{/g)) {
+    const start = m.index + m[0].length;
+    const end = css.indexOf("}", start);
+    if (end < 0) continue;
+    const body = css.slice(start, end);
+    const decl = (name) => {
+      const d = body.match(new RegExp("--" + name + "\\s*:\\s*var\\(\\s*(--[\\w-]+)"));
+      return d ? d[1] : null;
+    };
+    out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("tone-accent") };
+  }
+  return out;
+})();
+if (!Object.keys(TONE_BLOCKS).length) bad("tone map: no [data-tone] blocks parsed out of spine.css (the derivation below is empty)");
+
+const ACCENT_TONE = "accent";   // checked at 3.0 by the accent-as-background block below
+const TONE_GROUNDS = [...new Set(Object.values(TONE_BLOCKS).map((b) => b.bg).filter(Boolean))];
+const TONE_INKS = Object.fromEntries(Object.entries(TONE_BLOCKS).map(
+  ([tone, b]) => [tone, [...new Set([b.text, b.soft, b.accent].filter(Boolean))]]));
+const NORMAL_PAIRS = [];
+for (const [tone, b] of Object.entries(TONE_BLOCKS)) {
+  if (tone === ACCENT_TONE || !b.bg) continue;
+  for (const ink of TONE_INKS[tone]) NORMAL_PAIRS.push([ink, b.bg]);
+}
+note(`tone map derived from spine.css: ${Object.keys(TONE_BLOCKS).length} tone(s), ` +
+     `${TONE_GROUNDS.length} ground(s), ${NORMAL_PAIRS.length} base pair(s) ` +
+     `(${ACCENT_TONE} tone held for the 3.0 check)`);
 // The tone x hue cells that ACTUALLY OCCUR, read from the markup -- not every arithmetic
 // pair. A blind cross-product of six inks x five hues yields 19 "failures" on ZG where two
 // are real, and a checker that fires where there is no defect trains people to ignore it,
 // which lands in the same place as one that checks nothing. So: find every Section that
 // sets BOTH tone and hue, and check exactly the inks that tone puts on that hue's ground.
 // A site that never combines them generates zero extra pairs; an undeclared hue is inert.
-const TONE_INKS = {
-  paper:   LIGHT_INKS, alt: LIGHT_INKS, surface: LIGHT_INKS,
-  dark:    DARK_INKS,  slate: DARK_INKS, accent: DARK_INKS,
-};
 const composed = new Set();
 for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
   const src = stripComments(read(f) || "");
@@ -349,7 +380,7 @@ for (const cell of [...composed].sort()) {
   const [tone, n] = cell.split("|");
   const hue = `--hue-${n}`;
   if (!T[hue]) continue;                    // undeclared slot is inert (S4.6)
-  for (const ink of TONE_INKS[tone] || LIGHT_INKS) if (T[ink]) NORMAL_PAIRS.push([ink, hue]);
+  for (const ink of TONE_INKS[tone] || TONE_INKS.paper || []) if (T[ink]) NORMAL_PAIRS.push([ink, hue]);
   if (T[`${hue}-ink`]) NORMAL_PAIRS.push([`${hue}-ink`, hue]);
 }
 if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
