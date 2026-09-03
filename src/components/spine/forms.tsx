@@ -16,16 +16,36 @@ async function postJson(action: string, data: Record<string, string>) {
   if (!res.ok) throw new Error(String(res.status));
 }
 
-export function ContactForm({ action, fields, submitLabel = "Send", done = "Thanks, we'll be in touch.", honeypot = "company" }:
-  { action: string; fields: Field[]; submitLabel?: string; done?: string; honeypot?: string | false }) {
-  const [sent, setSent] = React.useState(false);
+// A FAILED POST IS REPORTED, NEVER CONFIRMED (aismith-site #47 drift item 2, raised
+// 2026-08-30). This component did `try { await postJson(...) } finally { setSent(true) }`,
+// so a rejected or unreachable POST still rendered `done` and the visitor believed a lost
+// lead had been delivered. `sent` is now reached only when the post RESOLVES; a failure
+// names itself and offers the mail path, which is the behaviour aismith-site shipped
+// locally in `src/components/IntakeForm.tsx` because the spine is byte-locked to the
+// pinned seed and it could not fix this file.
+//
+// `failed` mirrors `done`: both mounting sites are Dutch-language and already override
+// `done`, so a hardcoded English failure sentence would ship English into a Dutch page.
+// `contactEmail` is OPTIONAL because a required prop would break every mounting site's
+// build on the pin bump; without it the default failure copy states the failure and asks
+// for a retry rather than naming a mail path the component was not given.
+export function ContactForm({ action, fields, submitLabel = "Send", done = "Thanks, we'll be in touch.", honeypot = "company",
+  contactEmail, failed }:
+  { action: string; fields: Field[]; submitLabel?: string; done?: string; honeypot?: string | false;
+    contactEmail?: string; failed?: React.ReactNode }) {
+  const [state, setState] = React.useState<"idle" | "sending" | "sent" | "failed">("idle");
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(Array.from(fd.entries()).map(([k, v]) => [k, String(v)]));
-    try { await postJson(action, data); } finally { setSent(true); }
+    setState("sending");
+    try { await postJson(action, data); setState("sent"); } catch { setState("failed"); }
   };
-  if (sent) return <div className="form-card"><div className="form-done">{done}</div></div>;
+  const failureNode = failed ?? (contactEmail
+    ? <>That did not go through. Nothing was lost on your side: send the same thing to{" "}
+        <a href={`mailto:${contactEmail}`}>{contactEmail}</a> and we will pick it up.</>
+    : <>That did not go through, so nothing reached us. Please try again in a moment.</>);
+  if (state === "sent") return <div className="form-card"><div className="form-done">{done}</div></div>;
   return (
     <form className="form-card" onSubmit={onSubmit}>
       {/* S6: optional hidden honeypot — a real human never fills it; the `contact` edge
@@ -58,7 +78,15 @@ export function ContactForm({ action, fields, submitLabel = "Send", done = "Than
               : <input id={f.name} name={f.name} type={f.type || "text"} required={f.required} />}
         </div>
       ))}
-      <button className="btn btn-action" type="submit">{submitLabel} &rarr;</button>
+      {state === "failed" ? (
+        <p role="alert" style={{ color: "var(--accent-text)", marginTop: 4 }}>{failureNode}</p>
+      ) : null}
+      {/* disabled while the post is in flight, so a slow endpoint cannot be double-posted.
+          The LABEL is not swapped for a "Sending" string: `submitLabel` is per-site copy and
+          a hardcoded English transient would read as English on the two Dutch sites that
+          mount this. aismith-site's IntakeForm does swap it; that is the one deliberate
+          difference between the two and it is stated here rather than left to be found. */}
+      <button className="btn btn-action" type="submit" disabled={state === "sending"}>{submitLabel} &rarr;</button>
     </form>
   );
 }
