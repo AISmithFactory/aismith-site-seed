@@ -60,10 +60,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .sec-title { font-family: var(--font-display); font-weight: 800;
   font-size: clamp(30px, 5vw, 56px); line-height: 1.0; letter-spacing: -.02em; }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--accent-text); }
-[data-tone="dark"] .eyebrow, [data-tone="slate"] .eyebrow { color: var(--accent-on-dark); }
-[data-tone="accent"] .eyebrow { color: var(--on-dark); }
+  font-weight: 700; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; }
+  /* ink: the hue-ink rule below the S4.6 hue slots. Its two tone-keyed arms are RETIRED. */
 .lead { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.55; font-weight: 500; max-width: 54ch; }
 .em { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }   /* accent ink: hue, then tone, then the light default (S2.3 / S4.6) */
 /* Hue-as-TEXT variants (#122 item 6c, operator-ruled IN 2026-07-30): colour a word in
@@ -141,6 +139,39 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 [data-hue="3"] { --sec-accent: var(--hue-3-accent, var(--tone-accent)); --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="4"] { --sec-accent: var(--hue-4-accent, var(--tone-accent)); --sec-bg: var(--hue-4, var(--tone-bg)); --sec-text: var(--hue-4-ink, var(--tone-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="5"] { --sec-accent: var(--hue-5-accent, var(--tone-accent)); --sec-bg: var(--hue-5, var(--tone-bg)); --sec-text: var(--hue-5-ink, var(--tone-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+
+/* ---- the hue-ink rule (operator ruling 2026-09-06) ------------------------
+   ONE rule, keyed by SELECTOR, for the two selectors that held out against it.
+   Ink follows the SECTION GROUND -- hue, then tone, then the light default --
+   and never [data-tone]. The chain is the same shape for both; only the ROLE
+   differs, because that is what the selector is for.
+
+   WHAT IT REPLACES, and both were the same defect reached two ways. `.eyebrow`
+   carried `--accent-text` with `[data-tone="dark"]/[slate]` and `[data-tone="accent"]`
+   arms; `.crumb a` carried `--sec-soft` with a `[data-tone="dark"]/[slate]` arm.
+   `[data-hue]` re-grounds the section but cannot reach inside a selector keyed on
+   [data-tone], so on a hue ground each arm painted the TONE's ink on the HUE's
+   ground -- a cell no model deriving ink from the tone can see.
+
+   EXACTLY EQUIVALENT ON EVERY TONE-ONLY CASE, which is why it is a collapse and
+   not a restyle. The six tone blocks above set --tone-accent and --sec-soft, so
+   with no hue composed: dark/slate -> --accent-on-dark and --on-dark-soft, accent
+   -> --on-dark, paper/alt/surface and no [data-tone] at all -> --accent-text and
+   --text-soft. Every one of those is the value the retired arm set.
+
+   `.eyebrow` was DELIBERATELY held out at the 1824 wave on the measured (0,1,1)
+   contest (as-site-seed-spine.md v0.13.6), and `.crumb a` was opened as a seed-side
+   row by PR #19. The operator ruled on 2026-09-06 that the hold-out and the finding
+   are ONE decision and collapse into one rule. `.em`, `.btn-ghost` and `.crumb`
+   already took this chain at 1.8.24; these two are the remainder.
+
+   The [data-hue] check in agents/site/verify.mjs asserts it: both selectors now read
+   --sec-*, so their inks resolve through the hue block's OWN fallback chain and enter
+   the AA matrix on every composed hue. Reintroduce either arm and the TONE_KEYED scan
+   names it by selector on that ground. agents/site/fixtures.mjs holds a pair per
+   selector. */
+.eyebrow { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
+.crumb a { color: var(--sec-soft,   var(--tone-soft,   var(--text-soft))); }
 
 /* ---- Section fx layer (deco module behind content) ------------------------*/
 .section--fx { position: relative; overflow: hidden; }
@@ -291,8 +322,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 
 /* S2.3 / G1: --sec-soft is the ink for the SECTION's ground, so only a soft-ink selector
    sitting DIRECTLY on that ground may read it. Measured 2026-08-23: of the nine content-level
-   soft-ink selectors in this file, exactly TWO do -- `.stat .lbl` below and `.crumb a` at the
-   breadcrumb block. The other seven (`.media-card .loc`/`p`, `.tier-card .price small`/`li`,
+   soft-ink selectors in this file, exactly TWO do -- `.stat .lbl` below and `.crumb a`, which
+   moved to the hue-ink rule above on 2026-09-06 and still reads --sec-soft. The other seven
+   (`.media-card .loc`/`p`, `.tier-card .price small`/`li`,
    `.event-card .det`, `.info-card .v`, `.form-card label`) sit inside components that set
    their OWN ground, so widening them keys card ink to the section and regresses: `.info-card .v`
    inside a [data-tone="dark"] Section goes from 7.11 to 1.07. Card ink following the card's
@@ -363,9 +395,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .crumb { display: inline-flex; align-items: center; gap: 7px; font-weight: 800;
   font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase;
   color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
-.crumb a { color: var(--sec-soft, var(--text-soft)); }
+/* .crumb a ink: the hue-ink rule below the S4.6 hue slots. Its tone-keyed arm is RETIRED. */
 .crumb a:hover { color: var(--accent); }
-[data-tone="dark"] .crumb a, [data-tone="slate"] .crumb a { color: var(--on-dark-soft); }
 
 /* ---- responsive -----------------------------------------------------------*/
 @media (max-width: 900px) {
