@@ -301,10 +301,60 @@ function L(hex) {
 const cr = (fg, bg) => { const a = L(fg), b = L(bg), hi = Math.max(a, b), lo = Math.min(a, b); return (hi + 0.05) / (lo + 0.05); };
 function parseTokens(css) {
   const map = {};
-  for (const m of (css || "").matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) map[m[1]] = m[2];
+  for (const m of (css || "").matchAll(/(--[\w-]+)\s*:\s*(#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}))\s*;/g)) map[m[1]] = m[2];
+  return map;
+}
+// TRANSLUCENT tokens -- rgba(...) and 8-digit #RRGGBBAA -- parsed SEPARATELY, then
+// FLATTENED over whichever ground the pair puts them on. Raised 2026-08-27 (seed PR #17).
+//
+// WHY THIS EXISTS. parseTokens above read hex only, so every rgba() token dropped out of
+// `T` and the `if (!T[fg]) continue` guard downstream skipped its pair WITHOUT SAYING SO.
+// On this seed that is --on-dark-soft: rgba(248, 245, 239, .82), the soft ink on BOTH dark
+// tones, so two of the derived pairs were never asserted and the run still printed a clean
+// matrix. The 1824 round measured exactly those pairs BY HAND (AS 10.74 and 8.93, ZG 4.75
+// and 7.81) because the gate could not, which is the shape of a denominator nobody states.
+//
+// AND THE 8-DIGIT HEX CASE WAS WORSE THAN THE rgba ONE. The old pattern matched
+// #[0-9a-fA-F]{3,8}, so #RRGGBBAA landed in `T` as an opaque colour and L() sliced the
+// first six digits and DISCARDED the alpha -- an asserted ratio against a colour the
+// browser never paints. A silent skip is a gap; a confident wrong number is a defect.
+// Eight-digit values route here instead, where the alpha is honoured.
+//
+// THE FLATTEN IS NOT INVENTED HERE: the mapping profile's Rule B already states that a
+// translucent ink is evaluated composited over its ground, which is also what a browser
+// does. Source-over, no blend mode: out = a*fg + (1-a)*bg per channel.
+// A translucent GROUND is still skipped and NAMED, because it composites over whatever
+// sits behind the section and this gate cannot see that.
+function parseAlphaTokens(css) {
+  const map = {};
+  for (const m of (css || "").matchAll(/(--[\w-]+)\s*:\s*rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*[,/]?\s*([\d.]*)\s*\)\s*;/g))
+    map[m[1]] = { r: +m[2], g: +m[3], b: +m[4], a: m[5] === "" ? 1 : +m[5] };
+  for (const m of (css || "").matchAll(/(--[\w-]+)\s*:\s*#([0-9a-fA-F]{8})\s*;/g)) {
+    const h = m[2];
+    map[m[1]] = { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16),
+                  b: parseInt(h.slice(4, 6), 16), a: parseInt(h.slice(6, 8), 16) / 255 };
+  }
   return map;
 }
 const T = parseTokens(stripComments(tokens || ""));
+const TA = parseAlphaTokens(stripComments(tokens || ""));
+const hexOf = (n) => "#" + [n.r, n.g, n.b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
+function flattenOver(name, groundHex) {
+  const c = TA[name];
+  if (!c || !groundHex) return null;
+  let g = groundHex.replace("#", "");
+  if (g.length === 3) g = g.split("").map((x) => x + x).join("");
+  const gr = parseInt(g.slice(0, 2), 16), gg = parseInt(g.slice(2, 4), 16), gb = parseInt(g.slice(4, 6), 16);
+  return hexOf({ r: c.a * c.r + (1 - c.a) * gr, g: c.a * c.g + (1 - c.a) * gg, b: c.a * c.b + (1 - c.a) * gb });
+}
+// Resolve one side of a pair to a hex the contrast maths can take. An opaque token answers
+// as itself; a translucent one is flattened over the ground it is being checked against.
+const resolveColour = (name, groundHex = null) =>
+  T[name] ?? (groundHex ? flattenOver(name, groundHex) : null);
+// The set of tokens a pair referenced and this gate could NOT resolve, reported by name at
+// the end of [2]. A skip nobody can see is the whole defect above.
+const skippedTokens = new Set();
+let flattenedPairs = 0;
 // Normal body-text pairs -- must clear 4.5.
 //
 // GENERATED, NOT ENUMERATED (v0.13.9). This was a hardcoded list of 15 tone pairs while
@@ -376,14 +426,123 @@ for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
     composed.add(`${tone}|${h[1]}`);
   }
 }
+// THE HUE BLOCK, READ AS THE OPERAND IT IS (site-contract 1.8.24 M3's own lesson, applied
+// one level down; backlog rows of 2026-08-27). M3 stopped ENUMERATING the pair list and
+// derived it from the tone map. The loop that replaced it still derived the composed cell's
+// INKS from the tone -- and on a hue ground the hue block has already REPLACED --sec-text,
+// --sec-soft and --sec-accent. So the gate asserted tokens the browser does not paint
+// there: measured 2026-08-27 on zuidgeluid-site with all five --hue-N-accent slots
+// declared, `[2]` still reddened `--on-dark on --hue-3 = 2.06` (the TONE's main text token,
+// which [data-hue] overrides) and exit 1 did not move. A red nobody can act on and a render
+// nobody can trust are the same defect twice.
+//
+// So the inks for a composed cell are RESOLVED THROUGH THE HUE BLOCK'S OWN FALLBACK CHAIN
+// against the skin, exactly as the cascade resolves them.
+const HUE_BLOCKS = (() => {
+  const css = stripComments(read(P.spineCss) || "");
+  const out = {};
+  for (const m of css.matchAll(/\[data-hue=["']?(\d+)["']?\]\s*\{/g)) {
+    const start = m.index + m[0].length;
+    const end = css.indexOf("}", start);
+    if (end < 0) continue;
+    const body = css.slice(start, end);
+    const decl = (name) => {
+      const d = body.match(new RegExp("--" + name + "\\s*:\\s*([^;]+)"));
+      return d ? d[1] : null;
+    };
+    out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("sec-accent") };
+  }
+  return out;
+})();
+// Walk a var(--a, var(--b, var(--c))) chain and return the FIRST name the skin actually
+// declares, mapping --tone-* back through the tone map. Returns null when the whole chain
+// is undeclared, which is the S4.6 "inert" case and stays inert.
+function resolveChain(expr, tone) {
+  if (!expr) return null;
+  for (const m of expr.matchAll(/(--[\w-]+)/g)) {
+    let name = m[1];
+    const role = name.match(/^--tone-(bg|text|soft|accent)$/);
+    if (role) {
+      const b = TONE_BLOCKS[tone] || TONE_BLOCKS.paper;
+      name = b ? b[role[1] === "bg" ? "bg" : role[1]] : null;
+      if (!name) continue;
+    }
+    if (T[name] || TA[name]) return name;
+  }
+  return null;
+}
+// SELECTORS WHOSE INK COMES FROM THE TONE REGARDLESS OF THE GROUND -- the other half of the
+// same defect, and the half no instrument has ever held. A component that reads a token
+// directly rather than --sec-* is INVISIBLE to a model that derives the ink from the tone,
+// which is precisely what the client manifest recorded as `guard_is_partial` and what a
+// controller re-derived from an attacker run four weeks later. The hue block re-grounds the
+// section; it does not reach inside a selector keyed on [data-tone].
+//
+// So: scan spine.css for a rule whose selector carries [data-tone=X] AND a descendant, and
+// whose `color` is a token that is NOT --sec-*. Each one is a real ink on the hue ground,
+// named, and checked there. A selector already reading --sec-* follows the hue and is not
+// a divergence -- which is why widening this set keeps it narrow.
+const TONE_KEYED = [];   // { tone, selector, ink }
+{
+  const css = stripComments(read(P.spineCss) || "");
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const body = m[2];
+    const c = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
+    if (!c || c[1].startsWith("--sec-")) continue;
+    for (const part of m[1].split(",")) {
+      const t = part.match(/\[data-tone=["']?(\w+)["']?\]\s*\S/);
+      if (t) TONE_KEYED.push({ tone: t[1], selector: part.trim(), ink: c[1] });
+    }
+  }
+}
+if (TONE_KEYED.length) note(`selectors keying ink on the TONE rather than the ground (checked on every composed hue): ` +
+  TONE_KEYED.map((k) => `${k.selector} -> ${k.ink}`).join(" | "));
+
+const composedHues = new Set();
 for (const cell of [...composed].sort()) {
   const [tone, n] = cell.split("|");
   const hue = `--hue-${n}`;
-  if (!T[hue]) continue;                    // undeclared slot is inert (S4.6)
-  for (const ink of TONE_INKS[tone] || TONE_INKS.paper || []) if (T[ink]) NORMAL_PAIRS.push([ink, hue]);
-  if (T[`${hue}-ink`]) NORMAL_PAIRS.push([`${hue}-ink`, hue]);
+  if (!T[hue] && !TA[hue]) continue;        // undeclared slot is inert (S4.6)
+  composedHues.add(n);
+  const hb = HUE_BLOCKS[n];
+  if (!hb) { note(`hue ${n} is composed in the markup but spine.css declares no [data-hue="${n}"] block`); continue; }
+  // (i) the inks the HUE BLOCK renders, resolved through its own fallback chain.
+  const seen = new Set();
+  for (const role of ["text", "soft", "accent"]) {
+    const ink = resolveChain(hb[role], tone);
+    if (ink && !seen.has(ink)) { seen.add(ink); NORMAL_PAIRS.push([ink, hue, `hue ${n} --sec-${role}, tone=${tone}`]); }
+  }
+  // (ii) the inks a TONE-KEYED selector puts there anyway, named by selector.
+  for (const k of TONE_KEYED) {
+    if (k.tone !== tone || seen.has(k.ink)) continue;
+    seen.add(k.ink);
+    NORMAL_PAIRS.push([k.ink, hue, `${k.selector} on hue ${n}`]);
+  }
 }
 if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
+// PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
+// register is uniformly unsafe over that palette (--accent-on-dark on --hue-2 = 1.00, the
+// same hex) rather than slot-specific, so a skin can ship five safe pairs and still have no
+// usable dark cell. That is worth SAYING and is not worth failing: nothing renders it, and
+// a checker that fires where there is no defect trains people to ignore it. ADVISORY.
+{
+  const declaredHues = [...new Set(Object.keys(HUE_BLOCKS))].filter((n) => T[`--hue-${n}`] || TA[`--hue-${n}`]);
+  const uncomposed = declaredHues.filter((n) => !composedHues.has(n));
+  const wouldFail = [];
+  for (const n of uncomposed) {
+    const hue = `--hue-${n}`;
+    const ground = T[hue];
+    if (!ground) continue;
+    for (const ink of [...new Set(TONE_KEYED.map((k) => k.ink))]) {
+      const fg = resolveColour(ink, ground);
+      if (!fg) continue;
+      const r = cr(fg, ground);
+      if (r < 4.5) wouldFail.push(`${ink} on ${hue} = ${r.toFixed(2)}`);
+    }
+  }
+  if (uncomposed.length) note(`declared but UNCOMPOSED hue slot(s) ${uncomposed.map((n) => `--hue-${n}`).join(", ")}: not asserted (nothing renders them). ` +
+    (wouldFail.length ? `Were a tone-keyed ink composed there it would fail: ${wouldFail.join(", ")}` : `every tone-keyed ink would clear 4.5 there`));
+}
 
 // Accent-as-BACKGROUND text pair (on-dark body colour on the accent tone) --
 // large-display-only by S2.3/S4.3, so the threshold is 3.0 (NOT 4.5). On the accent
@@ -403,12 +562,21 @@ for (let n = 1; n <= 5; n++) {
   NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
 }
 let aaChecked = 0;
-for (const [fg, bg] of NORMAL_PAIRS) {
-  if (!T[fg] || !T[bg]) continue;
+let derivedPairs = NORMAL_PAIRS.length;
+for (const [fg, bg, via] of NORMAL_PAIRS) {
+  // The GROUND must be opaque: a translucent ground composites over whatever sits behind
+  // the section, which this gate cannot see, so it is a NAMED skip rather than a guess.
+  const bgHex = T[bg];
+  if (!bgHex) { if (TA[bg]) skippedTokens.add(`${bg} (translucent GROUND -- what sits behind it is not knowable here)`); continue; }
+  const fgHex = resolveColour(fg, bgHex);
+  if (!fgHex) { if (!T[fg] && !TA[fg]) { /* undeclared: inert by S4.6, not a skip */ } else skippedTokens.add(fg); continue; }
+  const flat = !T[fg];
+  if (flat) flattenedPairs++;
   aaChecked++;
-  const ratio = cr(T[fg], T[bg]);
-  if (ratio < 4.5) bad(`${fg} on ${bg} = ${ratio.toFixed(2)} (< 4.5 normal)`);
-  else ok(`${fg} on ${bg} = ${ratio.toFixed(2)}`);
+  const ratio = cr(fgHex, bgHex);
+  const label = `${fg} on ${bg}${flat ? ` (rgba flattened over the ground -> ${fgHex})` : ""}${via ? ` [${via}]` : ""}`;
+  if (ratio < 4.5) bad(`${label} = ${ratio.toFixed(2)} (< 4.5 normal)`);
+  else ok(`${label} = ${ratio.toFixed(2)}`);
 }
 // accentUses: does any accent-tone section carry small (non-display) text? If so the
 // large-only sanction does not apply and we DO require 4.5. Heuristic: a Section with
@@ -433,7 +601,14 @@ for (const [fg, bg] of ACCENT_LARGE_PAIRS) {
   else ok(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (>= ${threshold}${accentSmallText ? "" : " large-only"})`);
 }
 if (accentSmallText) note("an accent-tone section appears to carry small text -- accent checked at 4.5, not the large-only 3.0");
-if (!aaChecked) bad("no hex token pairs found to check (tokens.css missing or non-hex)");
+// THE DENOMINATOR, AND THE CHOICE, STATED IN THE SAME PLACE. A checker that reports a
+// verdict without its denominator has been silently narrowed before while it kept printing
+// OK, and the rgba class was outside the checked set for weeks with nothing saying so.
+note(`AA denominator: ${derivedPairs} pair(s) derived, ${aaChecked} asserted ` +
+     `(${flattenedPairs} of them with a translucent ink FLATTENED over its ground per the ` +
+     `mapping profile's Rule B), ${skippedTokens.size} token(s) unresolvable`);
+if (skippedTokens.size) note(`tokens the AA matrix could NOT resolve, by name: ${[...skippedTokens].join(", ")}`);
+if (!aaChecked) bad("no colour token pairs found to check (tokens.css missing or unparseable)");
 
 // == 3. VOICE -- em-dash literal AND entity forms (auditor hardening) ==
 out.push("\n[3] VOICE -- zero prose em-dashes (literal + entity); superlatives flagged");
@@ -564,8 +739,17 @@ if (CHARTER && existsSync(CHARTER)) {
     if (!orphanInRepo.length && !declaredNotBuilt.length && declared.size)
       ok(`charter <-> repo routes reconcile both ways (${declared.size} declared, ${repoPaths.size} built)`);
   }
+} else if (CHARTER) {
+  // SET BUT NOT ON DISK. The old message read "no --charter supplied" here, which is false
+  // and cost `cafe-josee-site` six red pushes: the workflow DID supply one, the value was
+  // the seed's unreplaced `aismith-site-charter.md`, and the operator read the message as
+  // "the workflow forgot the argument" and looked in the wrong place. Absent and missing
+  // are different defects with different fixes and they now say so.
+  (CI ? bad : soft)(`--charter ${CHARTER} was supplied but no such file exists in the repo ` +
+    `(this is a MISSING charter, not an absent argument: the workflow's CHARTER value names ` +
+    `a file that was never created -- check it was replaced for this site)` + (CI ? " (failing closed in CI)" : ""));
 } else {
-  (CI ? bad : soft)(`no --charter supplied; charter<->repo reconciliation skipped` + (CI ? " (failing closed in CI)" : ""));
+  (CI ? bad : soft)(`no --charter argument supplied at all; charter<->repo reconciliation skipped` + (CI ? " (failing closed in CI)" : ""));
 }
 
 // == 6. LOGO ASSET -- the real extracted mark, never a text-only wordmark fallback ==
@@ -700,6 +884,75 @@ out.push("\n[7] SSR VIEW-SOURCE -- out of scope for this static gate");
 note("This gate does NOT prove SSR. The residual production gate is one green `vite build`");
 note("plus a view-source by a NON-builder (or CI) confirming rendered copy in the HTML, not");
 note("an empty root div (as-site-build-agent.md Section 6.4). Run before PRODUCTION promotion.");
+
+// == 8. TEMPLATE INSTANTIATION -- the gate's own workflow, checked rather than instructed ==
+//
+// A SITE'S GATE WORKFLOW SAT OUTSIDE THE GATE BY CONSTRUCTION. [0] and [1] re-derive the
+// baseline by directory scan over src/components/spine + spine.css, so
+// .github/workflows/site-verify.yml is outside the compared set NO MATTER WHAT IT CONTAINS
+// -- and that file's own lines instruct a builder to replace two values in it. Instruction
+// is not enforcement. Measured 2026-08-14 at cafe-josee-site: it inherited the seed's
+// `CHARTER: aismith-site-charter.md` and `SEED_REF: main` verbatim, `site-verify` FAILED on
+// ALL SIX pushes from repo creation, and every LOCAL run reported exit 0, because the
+// workflow passes --ci and a set-but-missing charter only warned without it.
+//
+// So the fill-ins are checked here, in the file the workflow runs. Each finding NAMES THE
+// FIELD, because "the workflow is wrong" sends a reader to the wrong file.
+out.push("\n[8] INSTANTIATION -- the workflow's fill-ins are replaced, not inherited");
+{
+  // Find the gate workflow by CONTENT, not by filename: at least one site has renamed it,
+  // and a check keyed to a filename would report a clean absence on a repo that renamed it.
+  const wfDir = join(ROOT, ".github/workflows");
+  const wfFiles = walk(wfDir, [".yml", ".yaml"]).filter((f) => /SEED_REPO\s*:/.test(read(f) || ""));
+  if (!wfFiles.length) {
+    (CI ? bad : soft)("no gate workflow found under .github/workflows (no file declares SEED_REPO): " +
+      "this repo has no required status check, so nothing enforces any of the sections above");
+  } else {
+    // IS THIS REPO THE SEED? The seed legitimately carries SEED_REF: main -- the workflow's
+    // own comment says that value is NOT a pin there, because the seed has no external
+    // baseline. Resolve it from the git remote so this holds locally as well as in CI,
+    // falling back to the env signal [0] already uses.
+    let originRepo = null;
+    try {
+      const u = execSync("git remote get-url origin", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+      const m = u.match(/[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?$/);
+      if (m) originRepo = m[1].toLowerCase();
+    } catch { /* no remote: fall through to the env signal */ }
+    for (const f of wfFiles) {
+      const wf = read(f) || "";
+      const rel = relative(ROOT, f);
+      const val = (k) => {
+        const m = wf.match(new RegExp("^\\s*" + k + "\\s*:\\s*(.+)$", "m"));
+        return m ? m[1].replace(/#.*$/, "").trim().replace(/^["']|["']$/g, "").trim() : null;
+      };
+      const seedRepo = (val("SEED_REPO") || "").toLowerCase();
+      const isSeed = SEED_ROLE || (!!originRepo && !!seedRepo && originRepo === seedRepo);
+      const seedRef = val("SEED_REF");
+      const charterField = val("CHARTER");
+      // (a) SEED_REF must be the full 40-char sha the charter pins -- except in the seed.
+      if (isSeed) {
+        note(`${rel}: SEED_REF is not a pin in the seed repo itself (it only has to resolve, per the file's own note); not checked as one`);
+      } else if (!seedRef) {
+        bad(`${rel}: field SEED_REF is absent -- the baseline the spine is proved against is undeclared`);
+      } else if (!/^[0-9a-f]{40}$/i.test(seedRef)) {
+        bad(`${rel}: field SEED_REF is ${JSON.stringify(seedRef)}, which is NOT a full 40-character sha. ` +
+          (/^(main|master|HEAD)$/i.test(seedRef)
+            ? "This is the seed template's own UNREPLACED value: a moving ref silently re-baselines the gate, so the check cannot fail and cannot find (site-contract 1.8.6). Replace it with the sha this site's charter pins."
+            : "An abbreviated sha fails actions/checkout with 'git failed with exit code 1'. Use the full 40 characters."));
+      } else ok(`${rel}: SEED_REF is a full 40-character sha (${seedRef.slice(0, 12)}...)`);
+      // (b) CHARTER must name a file that EXISTS -- the cafe-josee case exactly.
+      if (charterField === null) note(`${rel}: field CHARTER is not declared; the charter reconciliation in [5] is deliberately off for this repo`);
+      else if (!charterField) note(`${rel}: field CHARTER is declared empty; the charter reconciliation in [5] is deliberately off for this repo`);
+      else if (!existsSync(join(ROOT, charterField)))
+        bad(`${rel}: field CHARTER names ${JSON.stringify(charterField)} and no such file exists in this repo` +
+          (isSeed ? "" : ` -- this is the seed template's value carried over unreplaced; [5] will fail every push until it names THIS site's charter`));
+      else ok(`${rel}: field CHARTER names a file that exists (${charterField})`);
+      // (c) any other fill-in left as a placeholder.
+      const ph = [...wf.matchAll(/^\s*([A-Z_]+)\s*:\s*(<[^>]+>|TODO\b.*|FIXME\b.*|CHANGEME\b.*|["']?xxx+["']?)\s*$/gim)].map((m) => `${m[1]}=${m[2].trim()}`);
+      if (ph.length) bad(`${rel}: unreplaced placeholder field(s): ${ph.join(", ")}`);
+    }
+  }
+}
 
 // == REPORT ==
 console.log(out.join("\n"));

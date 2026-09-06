@@ -48,4 +48,48 @@ in over it.
   safe to paste. See `SCAFFOLD.md` for the pinned build target and `functions/DEPLOY.md`
   for the Supabase Edge Function shape and (manual) deploy.
 
+## File classification -- SEED-SPINE / SEED-INSTANCE / UNRULED
+
+**Re-measured 2026-09-06 at `main` `5e77d77f`.** A file is classified when canon says whether
+it is **SEED-SPINE** (identical across every site at one contract version) or **SEED-INSTANCE**
+(per client). Measured 2026-08-14 at `d719e03b`, **nine of the seed's own files were neither**
+(15.3%), and the seed is the upstream floor under `aismith-site`'s 103 of 170. One of the nine,
+`src/router.tsx`, was declared SEED-SPINE at site-contract 1.8.19 and is in the gate's baseline
+via `EXTRA_SPINE`. **Eight remain**, and they split into two groups that are not alike.
+
+**Classified here, because existing canon already decides them.** Each restates an instruction
+that is already written down somewhere; none is a new rule.
+
+| File | Class | The statement it follows |
+|---|---|---|
+| `vite.config.ts` | **SEED-INSTANCE** | `prompts/builds/site-build.md` instructs the builder to *update `vite.config.ts` `pages` to match* the client route set. A file canon tells a builder to edit cannot be identical across sites. |
+| `netlify.toml` | **SEED-INSTANCE** | Per-site deploy configuration (site name, redirects, headers). Nothing shared claims it. |
+| `.gitignore` | **SEED-INSTANCE** | Per-repo hygiene; a site adds its own ignores and no check reads it. |
+| `backlog.md` | **SEED-INSTANCE** | This repo's own open work. A site forking it would inherit the seed's backlog, which is plainly wrong. |
+
+**UNRULED, and deliberately left so.** The remaining four are not undecided through oversight:
+each would bind the whole fleet the moment it is called, and neither reading is free.
+
+| File | Why it is not called here |
+|---|---|
+| `package.json` | SEED-SPINE would mean every site's dependency set is byte-identical to the seed's, so a site adding one dependency goes red on `[1b]`. SEED-INSTANCE would put the pinned React / TanStack versions the spine is authored against outside every check, which is the drift `SCAFFOLD.md` exists to prevent. |
+| `package-lock.json` | Follows `package.json` and cannot be classified apart from it. |
+| `tsconfig.json` | Same shape: the spine's `.tsx` compiles under these settings, and a site that loosens them breaks the spine silently rather than visibly. |
+| `public/_headers` | A security posture that arguably should be identical everywhere, which is an argument for making it so rather than a record that it is. |
+
+**Nothing here widens the gate's baseline, and that is the point.** `agents/site/verify.mjs`
+covers **26 files** at this sha (every file under `src/components/spine/`, `src/styles/spine.css`,
+and `src/router.tsx` via `EXTRA_SPINE`). None of the four classified above is SEED-SPINE, so the
+baseline is unchanged and the row's second half is satisfied without moving it. The four UNRULED
+files stay outside it until they are ruled -- **a baseline that leads the declaration is a gate
+enforcing a rule no document states**, which is the reason `EXTRA_SPINE` carries that instruction
+in its own comment.
+
+**Two documents disagree about where this classification belongs and the disagreement is open.**
+The backlog row asks for it *in the seed's own canon*, which is this file. `verify.mjs`'s
+`EXTRA_SPINE` comment says a path is added *only after canon declares it*, naming
+`as-site-seed-spine.md`'s file manifest (site-contract 1.8.19) as that canon. Those are different
+documents. This block is the seed-side half; the manifest is a stamped Factory file and is not
+edited from here.
+
 ## Layout
