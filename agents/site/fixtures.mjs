@@ -179,6 +179,69 @@ check("selector reading --sec-* is not counted as a divergence",
   { forbid: ['[data-tone="dark"] .lbl on hue 3'] });
 
 // =====================================================================================
+// 3a. THE HUE-INK RULE -- a PAIR PER SELECTOR for the two the operator collapsed.
+// =====================================================================================
+// Operator ruling 2026-09-06: `.eyebrow` (held out at the 1824 wave on the measured
+// (0,1,1) contest, as-site-seed-spine.md v0.13.6) and `.crumb a` (opened as a seed-side
+// row by PR #19) are ONE decision and collapse into ONE selector-keyed hue-ink rule in
+// spine.css. Both now read --sec-*, so the [data-hue] check resolves their inks through
+// the hue block's own chain instead of the tone's.
+//
+// WHY A PAIR PER SELECTOR AND NOT ONE FOR BOTH. The rule is one rule, but it is applied
+// at two selectors with two different ROLES -- accent for `.eyebrow`, soft for `.crumb a`
+// -- resolving through two different legs of the hue block. A single fixture would leave
+// whichever leg it did not exercise unguarded, and reverting only that selector would be
+// indistinguishable from the rule holding. Each pair is: the RETIRED tone-keyed arm, which
+// must fire and be named by selector, and the COLLAPSED form, which must not.
+//
+// THE SEED'S OWN RUN CANNOT DO THIS JOB and that is the reason this file carries it. The
+// seed composes no `hue={N}` in any markup, so `composed` is empty there and no hue cell
+// is ever generated: a regression on either selector is invisible to the seed's own gate
+// and visible on every site that composes a hue. These four cases are the only place the
+// rule is proved to be assertable.
+
+// NEGATIVE, .eyebrow: the retired accent arm, reintroduced. --accent-on-dark lands on the
+// hue ground and must be caught AND named by selector.
+check("hue-ink rule, .eyebrow: the RETIRED tone-keyed arm fires and is named by selector",
+  run(tree({
+    "src/styles/tokens.css": PLANT_TOKENS,
+    "src/styles/spine.css": TONE_MAP + HUE_MAP + `\n[data-tone="dark"] .eyebrow { color: var(--accent-on-dark); }\n`,
+    "src/content/home.tsx": PLANT_PAGE })),
+  { expect: ["--accent-on-dark on --hue-3", '[data-tone="dark"] .eyebrow on hue 3'] });
+
+// POSITIVE, .eyebrow: the COLLAPSED form. It reads --sec-accent, so it is not a divergence
+// and its ink is the one the hue block's accent leg resolves -- --hue-3-accent, asserted on
+// --hue-3 by the [data-hue] check rather than by anything selector-specific.
+check("hue-ink rule, .eyebrow: the COLLAPSED form is not a divergence and its hue ink is asserted",
+  run(tree({
+    "src/styles/tokens.css": PLANT_TOKENS,
+    "src/styles/spine.css": TONE_MAP + HUE_MAP + `\n.eyebrow { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }\n`,
+    "src/content/home.tsx": PLANT_PAGE })),
+  { expect: ["--hue-3-accent on --hue-3"],
+    forbid: [".eyebrow on hue 3", "--accent-on-dark on --hue-3"] });
+
+// NEGATIVE, .crumb a: the retired SOFT arm, reintroduced. A different leg of the same rule.
+// --on-dark-soft is #DDDDDD in PLANT_TOKENS and fails on --hue-3, so this case asserts the
+// ratio as well as the naming.
+check("hue-ink rule, .crumb a: the RETIRED tone-keyed arm fires and is named by selector",
+  run(tree({
+    "src/styles/tokens.css": PLANT_TOKENS,
+    "src/styles/spine.css": TONE_MAP + HUE_MAP + `\n[data-tone="dark"] .crumb a { color: var(--on-dark-soft); }\n`,
+    "src/content/home.tsx": PLANT_PAGE })),
+  { expect: ["--on-dark-soft on --hue-3", '[data-tone="dark"] .crumb a on hue 3', "(< 4.5 normal)"] });
+
+// POSITIVE, .crumb a: the COLLAPSED form, on the soft leg. --hue-3-soft is undeclared in
+// PLANT_TOKENS, so the chain falls to --hue-3-ink exactly as the cascade resolves it, and
+// that is what must be asserted on --hue-3.
+check("hue-ink rule, .crumb a: the COLLAPSED form is not a divergence and its hue ink is asserted",
+  run(tree({
+    "src/styles/tokens.css": PLANT_TOKENS,
+    "src/styles/spine.css": TONE_MAP + HUE_MAP + `\n.crumb a { color: var(--sec-soft, var(--tone-soft, var(--text-soft))); }\n`,
+    "src/content/home.tsx": PLANT_PAGE })),
+  { expect: ["--hue-3-ink on --hue-3"],
+    forbid: [".crumb a on hue 3", "--on-dark-soft on --hue-3"] });
+
+// =====================================================================================
 // 4. INSTANTIATION -- the workflow fill-ins (the cafe-josee case).
 // =====================================================================================
 const SITE = {

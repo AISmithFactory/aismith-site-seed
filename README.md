@@ -50,15 +50,16 @@ in over it.
 
 ## File classification -- SEED-SPINE / SEED-INSTANCE / UNRULED
 
-**Re-measured 2026-09-06 at `main` `5e77d77f`.** A file is classified when canon says whether
-it is **SEED-SPINE** (identical across every site at one contract version) or **SEED-INSTANCE**
-(per client). Measured 2026-08-14 at `d719e03b`, **nine of the seed's own files were neither**
-(15.3%), and the seed is the upstream floor under `aismith-site`'s 103 of 170. One of the nine,
-`src/router.tsx`, was declared SEED-SPINE at site-contract 1.8.19 and is in the gate's baseline
-via `EXTRA_SPINE`. **Eight remain**, and they split into two groups that are not alike.
+**Re-measured 2026-09-06 at `main` `5e77d77f`; CLOSED the same day at `cef3a063`.** A file is
+classified when canon says whether it is **SEED-SPINE** (identical across every site at one
+contract version) or **SEED-INSTANCE** (per client). Measured 2026-08-14 at `d719e03b`, **nine of
+the seed's own files were neither** (15.3%), and the seed is the upstream floor under
+`aismith-site`'s 103 of 170. One of the nine, `src/router.tsx`, was declared SEED-SPINE at
+site-contract 1.8.19 and is in the gate's baseline via `EXTRA_SPINE`. The other eight are
+classified below. **Nine of nine, and the UNRULED group is empty.**
 
-**Classified here, because existing canon already decides them.** Each restates an instruction
-that is already written down somewhere; none is a new rule.
+**Four were classified here on 2026-09-06 because existing canon already decided them.** Each
+restates an instruction that is already written down somewhere; none is a new rule.
 
 | File | Class | The statement it follows |
 |---|---|---|
@@ -67,29 +68,34 @@ that is already written down somewhere; none is a new rule.
 | `.gitignore` | **SEED-INSTANCE** | Per-repo hygiene; a site adds its own ignores and no check reads it. |
 | `backlog.md` | **SEED-INSTANCE** | This repo's own open work. A site forking it would inherit the seed's backlog, which is plainly wrong. |
 
-**UNRULED, and deliberately left so.** The remaining four are not undecided through oversight:
-each would bind the whole fleet the moment it is called, and neither reading is free.
+**The remaining four were RULED SEED-INSTANCE by the operator on 2026-09-06.** They had been
+left UNRULED deliberately rather than through oversight: each binds the whole fleet the moment
+it is called, and PR #19 recorded the cost of both readings beside each file so the ruling would
+be one line rather than a re-investigation. It was taken as one decision for all four.
 
-| File | Why it is not called here |
-|---|---|
-| `package.json` | SEED-SPINE would mean every site's dependency set is byte-identical to the seed's, so a site adding one dependency goes red on `[1b]`. SEED-INSTANCE would put the pinned React / TanStack versions the spine is authored against outside every check, which is the drift `SCAFFOLD.md` exists to prevent. |
-| `package-lock.json` | Follows `package.json` and cannot be classified apart from it. |
-| `tsconfig.json` | Same shape: the spine's `.tsx` compiles under these settings, and a site that loosens them breaks the spine silently rather than visibly. |
-| `public/_headers` | A security posture that arguably should be identical everywhere, which is an argument for making it so rather than a record that it is. |
+| File | Class | The cost of the reading that was not taken |
+|---|---|---|
+| `package.json` | **SEED-INSTANCE** (ruled 2026-09-06) | SEED-SPINE would mean every site's dependency set is byte-identical to the seed's, so a site adding one dependency goes red on `[1b]`. A site MAY add a dependency; the seed's own pins remain the authored-against set and are asserted by `SCAFFOLD.md`, not by the gate. |
+| `package-lock.json` | **SEED-INSTANCE** (ruled 2026-09-06) | Follows `package.json` and cannot be classified apart from it, so it takes the same class for the same reason. |
+| `tsconfig.json` | **SEED-INSTANCE** (ruled 2026-09-06) | SEED-SPINE would freeze compiler settings a site cannot extend. The cost of this reading is real and is stated rather than hidden: a site that LOOSENS these settings breaks the spine silently rather than visibly, and nothing in the gate sees it. |
+| `public/_headers` | **SEED-INSTANCE** (ruled 2026-09-06) | A security posture that arguably should be identical everywhere. Ruled per-site; making it identical fleet-wide is a separate act, not a record. |
 
-**Nothing here widens the gate's baseline, and that is the point.** `agents/site/verify.mjs`
-covers **26 files** at this sha (every file under `src/components/spine/`, `src/styles/spine.css`,
-and `src/router.tsx` via `EXTRA_SPINE`). None of the four classified above is SEED-SPINE, so the
-baseline is unchanged and the row's second half is satisfied without moving it. The four UNRULED
-files stay outside it until they are ruled -- **a baseline that leads the declaration is a gate
-enforcing a rule no document states**, which is the reason `EXTRA_SPINE` carries that instruction
-in its own comment.
+**The gate's baseline moves by ZERO paths, and that is what "widen accordingly" comes to here.**
+`agents/site/verify.mjs` covers **26 files** at this sha (every file under
+`src/components/spine/`, `src/styles/spine.css`, and `src/router.tsx` via `EXTRA_SPINE`).
+`EXTRA_SPINE` is the SEED-SPINE baseline and holds SEED-SPINE paths only. **All eight files
+classified above are SEED-INSTANCE, so none of them is a baseline path** and the baseline stays
+at 26. A SEED-INSTANCE ruling widens the baseline by zero by definition: putting a per-client
+file in a byte-identity baseline would red every site that exercised the very per-client licence
+the ruling grants, and would be **a gate enforcing a rule no document states**, which is exactly
+what `EXTRA_SPINE`'s own comment forbids.
 
 **Two documents disagree about where this classification belongs and the disagreement is open.**
 The backlog row asks for it *in the seed's own canon*, which is this file. `verify.mjs`'s
 `EXTRA_SPINE` comment says a path is added *only after canon declares it*, naming
 `as-site-seed-spine.md`'s file manifest (site-contract 1.8.19) as that canon. Those are different
 documents. This block is the seed-side half; the manifest is a stamped Factory file and is not
-edited from here.
+edited from here, and it carries a sentence -- *the four that remain unclassified are named in
+the instance doc* -- that this ruling retires.
 
 ## Layout
