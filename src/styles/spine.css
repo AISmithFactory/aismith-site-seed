@@ -104,7 +104,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .sec-quote  { font-family: var(--font-display); font-weight: 800;
   font-size: clamp(19px, 2.1vw, 27px); line-height: 1.26; letter-spacing: -.015em; }
 .namelist   { font-family: var(--font-display); font-weight: 600; font-size: 15px; line-height: 1.85; }
-.galcredit  { font-weight: 700; font-size: 13px; }
+.galcredit  { font-weight: 700; font-size: 13px; letter-spacing: .03em; }
 .galcredit a { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .display-line { font-family: var(--font-display); font-weight: 900;
   font-size: clamp(28px, 4vw, 52px); line-height: 1.02; letter-spacing: -.02em; }
