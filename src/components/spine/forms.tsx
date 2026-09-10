@@ -94,24 +94,48 @@ export function ContactForm({ action, fields, submitLabel = "Send", done = "Than
 /** NewsletterForm v2 -- stacked NAME + EMAIL is the fleet default (operator decision
     2026-07-27, #122 item 5). Posts {name, email}; the shared `contact` fn's signup
     mode folds `name` into the mail. Pass withName={false} for the email-only shape. */
+// A FAILED POST IS REPORTED, NEVER CONFIRMED. #18 (`5e77d77`) is the PRECEDENT: it fixed
+// the identical shape in ContactForm above, and this component was left still
+// holding it. It did `try { await postJson(...) } finally { setSent(true) }`, so a
+// rejected or unreachable POST still rendered `done` and the visitor believed they were
+// subscribed when nothing had reached us. `sent` is now reached only when the post
+// RESOLVES; a failure names itself, and the button is disabled while the post is in
+// flight so a slow endpoint cannot be double-posted. The LABEL is not swapped for a
+// "Sending" string, for the same per-site-copy reason ContactForm states.
+//
+// `failed` mirrors `done`: both mounting sites are Dutch-language and already override
+// `done`, so a hardcoded English failure sentence would ship English into a Dutch page.
+// The default sentence is ContactForm's contactEmail-less one VERBATIM, because this form
+// takes no `contactEmail`: a newsletter signup has no mail path to offer, so the copy
+// states the failure and asks for a retry rather than naming one it was not given.
+//
+// The failure ink is `--accent-on-dark`, NOT ContactForm's `--accent-text`. This form
+// mounts on a DARK ground and the spine says so itself in `spine.css`, at the rule
+// `.nl-done { color: var(--on-dark) }`; `--accent-text` is tuned for the light grounds
+// ContactForm sits on and would ship a sub-AA ink into the footer.
 export function NewsletterForm({ action, withName = true, namePlaceholder = "Your name",
-  placeholder = "Your email", submitLabel = "Subscribe", done = "You're on the list." }:
+  placeholder = "Your email", submitLabel = "Subscribe", done = "You're on the list.", failed }:
   { action: string; withName?: boolean; namePlaceholder?: string; placeholder?: string;
-    submitLabel?: string; done?: string }) {
-  const [sent, setSent] = React.useState(false);
+    submitLabel?: string; done?: string; failed?: React.ReactNode }) {
+  const [state, setState] = React.useState<"idle" | "sending" | "sent" | "failed">("idle");
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data: Record<string, string> = { email: String(fd.get("email") || "") };
     if (withName) data.name = String(fd.get("name") || "");
-    try { await postJson(action, data); } finally { setSent(true); }
+    setState("sending");
+    try { await postJson(action, data); setState("sent"); } catch { setState("failed"); }
   };
-  if (sent) return <p className="nl-done">{done}</p>;
+  const failureNode = failed ?? <>That did not go through, so nothing reached us. Please try again in a moment.</>;
+  if (state === "sent") return <p className="nl-done">{done}</p>;
   return (
     <form className="nl-form" onSubmit={onSubmit}>
       {withName && <input name="name" type="text" required placeholder={namePlaceholder} aria-label={namePlaceholder} />}
       <input name="email" type="email" required placeholder={placeholder} aria-label={placeholder} />
-      <button className="btn btn-action" type="submit">{submitLabel} &rarr;</button>
+      {state === "failed" ? (
+        <p role="alert" style={{ color: "var(--accent-on-dark)", marginTop: 4 }}>{failureNode}</p>
+      ) : null}
+      <button className="btn btn-action" type="submit" disabled={state === "sending"}>{submitLabel} &rarr;</button>
     </form>
   );
 }
