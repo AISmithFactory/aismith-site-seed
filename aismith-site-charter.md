@@ -8,6 +8,32 @@ against.
 **URL:** demo = `<slug>.demos.aismith.io` (Netlify) with `seo.noindex=true` (public but
 uncrawlable); production = `aismith.io` with `seo.noindex=false`. Same build, config-only switch.
 
+## Frozen-layer pin (S3.2 / `verify` [1b])
+The spine is proven byte-for-byte against `aismith-site-seed` at the sha declared in the
+fenced `seed` block below: one block, one line, the full 40 characters. `verify.mjs`
+re-derives the [1b] baseline from that sha at runtime and the gate workflow checks the seed
+out at it, so this field and `SEED_REF` in `.github/workflows/site-verify.yml` are the same
+fact written twice and have to be equal. Bump the pin and resync the spine bytes in the SAME
+PR: [1a] passes a spine diff only when every touched file is byte-identical to the pinned
+seed, so a pin that moves without its bytes fails [1b] on the next push.
+
+**THIS REPO IS THE SEED**, and that is the one case the paragraph above cannot describe. The
+seed has no external baseline at any ref, so no value here is a pin: `verify.mjs` reports [1a]
+and [1b] as REVIEW, never PASS and never FAIL, when `GITHUB_REPOSITORY` equals `SEED_REPO`,
+and a human reviews a spine change here. The gate workflow states the same thing about its own
+`SEED_REF`, which is set to `main` there for the identical reason. So the block below carries
+the template's UNREPLACED marker rather than a sha, and it is the field a fork fills, not a
+value this repo maintains.
+
+**A fork replaces the line below** with the full 40-character sha of the `aismith-site-seed`
+commit its spine was copied from, in the SAME commit that sets `SEED_REF` in
+`.github/workflows/site-verify.yml` to that sha. Leaving either unreplaced leaves the baseline
+undeclared, which `verify` [8] names by field.
+
+```seed
+<replace-with-the-40-character-aismith-site-seed-sha>
+```
+
 ## Pages / routes (S7.1, S8.4a)
 Every public route is declared in the fenced `routes` block below, one per line,
 slash-prefixed, `/` for the index. **Nothing outside this block is read as a route
