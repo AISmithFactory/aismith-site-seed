@@ -126,6 +126,16 @@ jobs:
           npm run build
           npx tsc --noEmit
 
+      - name: Self-test the gate before trusting it
+        # THE HARNESS RUNS FIRST AND IS NOT GUARDED ON THE SEED CHECKOUT. It generates its own
+        # fixture trees under a mkdtemp directory it owns, reaches no network and reads no
+        # credential, so it is decidable whether or not the seed resolved. A change to verify.mjs
+        # that SILENCES a check passes the gate below and fails here, which is the only order in
+        # which this step is worth having. Its scope is stated in its own header and printed at the
+        # end of the run: the checks added 2026-09-18 plus the [8] fill-in branches, not the
+        # sections that predate them.
+        run: node agents/site/verify.selftest.mjs
+
       - name: Run the Section-6 gate (fail-closed)
         # SKIPPED, not softened, when the seed is unavailable. The arguments below are
         # invariant: --ci and --seed are never removed to make this green.
