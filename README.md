@@ -99,3 +99,55 @@ edited from here, and it carries a sentence -- *the four that remain unclassifie
 the instance doc* -- that this ruling retires.
 
 ## Layout
+
+## The gate's own harness, and the two operands it reads
+
+`agents/site/verify.mjs` is the mechanical gate. `agents/site/verify.selftest.mjs` beside it is the
+harness that can FAIL it: it generates a fixture site per case, mutates exactly one thing, and
+asserts the finding. Run it bare, from the repo root, with no arguments and no network:
+
+```
+node agents/site/verify.selftest.mjs      # exit 0 = every case behaved as specified
+```
+
+It is bound in `.github/workflows/site-verify.yml` as its own step, so a change to `verify.mjs`
+that silences a check fails the gate rather than passing it quietly. Its SCOPE is stated in its own
+header and printed at the end of every run: it covers the checks added on 2026-09-18 and the `[8]`
+fill-in branches, not the sections that predate them.
+
+### The `lanes` block, which is what `[9]` reads
+
+`[9] S8 PER-LANE RECORD` is **opt-in**: with no `--brief` it reports NOT ARMED and fails nothing.
+Pass `--brief <file>` and it reads ONE fenced block out of that file and nothing else in it, the
+same declare-then-enforce shape as `[5]`'s ```routes block. `as-site-intake-standard.md` S8 owns the
+requirement; this is the grammar, stated here so a brief author has a source that is not the
+checker:
+
+````
+```lanes
+content: consumed=<what went in>; looked-for=<what it went looking for>
+facts: consumed=...; looked-for=...
+brand: consumed=...; looked-for=...
+enrichment: consumed=...; looked-for=...
+intent: consumed=none supplied; looked-for=scope and emphasis
+```
+````
+
+- One line per lane, `<lane>: consumed=<...>; looked-for=<...>`. **Both halves are required**, and
+  a lane that came back thin still owes a record saying so.
+- The five lane names are S3's: `content`, `facts`, `brand`, `enrichment`, `intent`. A name S3 does
+  not declare is read and reported, never scored.
+- `#`-prefixed lines inside the block are ignored. Nothing OUTSIDE the block is read as a record.
+- **The check cannot prove a lane was run**, and it says so in its own output. A lane that was never
+  run and whose line was written anyway passes it. What it proves is that the record EXISTS and
+  names every lane, which is the half a document cannot do.
+
+### `--hue-N` grounds beyond `<Section hue>`
+
+`[2]`'s composed-ground discovery reads a LIST of hue carriers, `HUE_CARRIERS` in `verify.mjs`, one
+line per markup attribute that puts a `--hue-N` slot under something: `data-hue` (`<Section hue>`,
+handled through the `[data-hue]` cascade) and `data-hue-bar` (`<TierCard hue>`, whose
+`.tier-card .tier-ico` hardcodes `color: var(--on-dark)` on that ground). **Extend it by adding a
+line**, naming the component that renders the attribute and the `spine.css` anchor that grounds it.
+A `data-hue*` attribute the spine layer ships that no entry names is reported as UNSCORED rather
+than silently skipped, so the list decaying is a finding.

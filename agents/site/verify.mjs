@@ -23,7 +23,8 @@
 // Per as-agent-fleet.md Section 8: build the gate once, share it; never re-encode it.
 //
 // Zero dependencies. Node 18+.  Usage:
-//   node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--base <ref>] [--ci]
+//   node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--brief <file>]
+//                   [--base <ref>] [--ci]
 //   exit 0 = all hard checks pass | exit 1 = a hard check failed
 //   exit 2 = INVOCATION error (repoRoot is not a directory). Distinct from 1 on purpose:
 //            a run that never looked at the tree has not measured it, and must not be
@@ -35,6 +36,10 @@
 // --seed     authoritative spine source (a checked-out site-seed repo, or a dir
 //            holding the canonical spine files). REQUIRED to prove spine integrity.
 // --charter  the <slug>-site-charter.md to reconcile routes against (bidirectional).
+// --brief    the intake brief to read the as-site-intake-standard.md S8 per-lane record
+//            from. OPT-IN: with no --brief, section [9] reports NOT ARMED and fails
+//            nothing, because the stamped workflow template passes no such argument and
+//            arming a check through a template nobody has cut would red every site.
 // --ci       fail-closed mode: a missing seed baseline or unresolvable git base is a
 //            HARD FAIL, not a warning. CI must pass --ci.
 
@@ -50,7 +55,7 @@ const args = process.argv.slice(2);
 // CHARTER FILE, every path below it missed, and the run reported NINE confident FAILs on
 // a clean tree. CI was never exposed (it passes `.` first); the documented local
 // invocation was. Raised by zuidgeluid-site, 2026-08-04.
-const VALUE_FLAGS = new Set(["--seed", "--charter", "--base"]);
+const VALUE_FLAGS = new Set(["--seed", "--charter", "--brief", "--base"]);
 const consumesNext = new Set();
 args.forEach((a, i) => { if (VALUE_FLAGS.has(a)) consumesNext.add(i + 1); });
 const ROOT = args.find((a, i) => !a.startsWith("--") && !consumesNext.has(i)) ?? ".";
@@ -62,7 +67,7 @@ const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 
 // answer, so this is an invocation error (exit 2), not a finding (exit 1).
 if (!existsSync(ROOT) || !statSync(ROOT).isDirectory()) {
   console.error(`verify.mjs: repoRoot ${JSON.stringify(ROOT)} is not a directory -- refusing to run.`);
-  console.error("Usage: node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--base <ref>] [--ci]");
+  console.error("Usage: node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--brief <file>] [--base <ref>] [--ci]");
   process.exit(2);
 }
 const SEED = flag("--seed");
@@ -83,9 +88,31 @@ const SEED = flag("--seed");
 // stamped fill-in template: SEED_REPO is declared at workflow level and GITHUB_REPOSITORY
 // is set by Actions, so both reach this process. Outside CI neither is set, this is false,
 // and a local run behaves exactly as it did before.
-const SEED_ROLE = !!(process.env.GITHUB_REPOSITORY && process.env.SEED_REPO &&
-  process.env.GITHUB_REPOSITORY.trim().toLowerCase() === process.env.SEED_REPO.trim().toLowerCase());
+//
+// AND THE CARVE-OUT IS GRANTED ONLY TO A REPO CANON DECLARES TO BE THE SEED (row 107: "the
+// SEED_REPO carve-out has no assertion"). Until now the two lines below granted it to ANY repo
+// whose SEED_REPO named itself, so a site that copied its own slug into that env line turned
+// [1a] and [1b] from GATES into REVIEW and its workflow still reported green. That is the
+// fail-closed-to-no-op conversion as-site-spine-standard.md S8 rule 3 exists to stop, reached by
+// a copied env line rather than by a dropped flag; S8 rule 4 states the fact a site author reads
+// ("a site's SEED_REPO names AISmithFactory/aismith-site-seed and never itself") and says in
+// terms that the ASSERTION half is not written there.
+//
+// ONE LIST, HERE, AND IT FOLLOWS EXTRA_SPINE's RULE EXACTLY: add a name only after canon declares
+// it, never the other way round, because a checker leading its declaration enforces a rule no
+// document states. Its sole entry is the repository as-site-spine-standard.md S8 rule 4 names in
+// terms (site-contract 1.8.25). [8] INSTANTIATION resolves the same question from the git remote
+// and reads THIS constant rather than carrying a second copy of it.
+const CANON_SEED_REPOS = ["aismithfactory/aismith-site-seed"];
+const isCanonSeed = (repo) => CANON_SEED_REPOS.includes((repo || "").trim().toLowerCase());
+const ghRepo = (process.env.GITHUB_REPOSITORY || "").trim().toLowerCase();
+const envSeedRepo = (process.env.SEED_REPO || "").trim().toLowerCase();
+// Both env values present and equal. A LOCAL run sets neither, so this is false and nothing
+// below changes behaviour outside CI, exactly as before.
+const SEED_SELF_NAMED = !!(ghRepo && envSeedRepo && ghRepo === envSeedRepo);
+const SEED_ROLE = SEED_SELF_NAMED && isCanonSeed(envSeedRepo);
 const CHARTER = flag("--charter");
+const BRIEF = flag("--brief");
 const BASE = flag("--base");
 const CI = args.includes("--ci") || process.env.CI === "true";
 
@@ -152,7 +179,7 @@ const stripComments = (s) =>
 // Re-derive the authoritative spine file set + hashes from the SEED at runtime.
 // Never trust pasted/embedded constants. If the seed cannot be resolved, fail
 // closed in CI (do not assume the spine is fine).
-out.push("\n[0] BASELINE -- authoritative spine re-derived from the seed at runtime");
+out.push("\n[0] BASELINE -- authoritative spine re-derived from the seed at runtime; SEED_REPO provenance asserted");
 let seedSpine = null; // map relPathUnderSpineLayer -> sha
 function spineFilesUnder(rootDir) {
   // recursive scan: every file under src/components/spine + the single spine.css
@@ -176,6 +203,29 @@ if (SEED && existsSync(SEED)) {
   // FAIL CLOSED in CI. No embedded-constant fallback, ever.
   (CI ? bad : soft)(`no authoritative spine baseline (--seed missing/unresolvable); ` +
     `${CI ? "failing closed (CI)" : "byte-for-byte spine check skipped -- pass --seed to enforce"}`);
+}
+// (b) SEED_REPO PROVENANCE -- the assertion half of as-site-spine-standard.md S8 rule 4, which
+// states the fact and says in terms that the assertion is not written there. A site whose
+// SEED_REPO names its own repository has disabled two spine gates while its workflow still
+// reports green, so this is a hard FAIL that names the field rather than a review line: the whole
+// defect is that the surface reads green, and a severity a reader can skip reproduces it.
+if (SEED_SELF_NAMED && !SEED_ROLE) {
+  bad(`SEED_REPO names THIS repository (${envSeedRepo}) and canon does not declare it the seed: a ` +
+      `site's SEED_REPO names the canon-declared seed and never itself (as-site-spine-standard.md ` +
+      `S8 rule 4). Pointed at itself, the seed-role carve-out would turn [1a] and [1b] from GATES ` +
+      `into REVIEW and this run would still report green. Set SEED_REPO to ${CANON_SEED_REPOS.join(" or ")} ` +
+      `in the gate workflow.`);
+} else if (SEED_ROLE) {
+  ok(`SEED_REPO names this repository AND canon declares it the seed (${envSeedRepo}), so the S8 ` +
+     `rule 4 carve-out applies here and [1a]/[1b] report REVIEW rather than PASS`);
+} else if (ghRepo && envSeedRepo) {
+  ok(`SEED_REPO (${envSeedRepo}) is not this repository (${ghRepo})`);
+} else {
+  // A LOCAL run sets neither variable, and that is not a finding about the site. Saying WHICH of
+  // the two is missing keeps a green local run from being read as a cleared assertion.
+  note(`SEED_REPO provenance not evaluated from the environment: ${!ghRepo ? "GITHUB_REPOSITORY" : "SEED_REPO"} ` +
+       `is unset (a local run sets neither). [8] INSTANTIATION resolves the same question from the ` +
+       `git remote and the workflow's declared value instead`);
 }
 
 // == 1. SCOPED DIFF + SPINE INTEGRITY ==
@@ -518,6 +568,100 @@ for (const cell of [...composed].sort()) {
     seen.add(k.ink);
     NORMAL_PAIRS.push([k.ink, hue, `${k.selector} on hue ${n}`]);
   }
+}
+// THE GROUND HALF OF row 046: `<Section hue>` IS NOT THE ONLY HUE CARRIER, and the ones it
+// misses carry HARDCODED inks. Everything above discovers grounds from `[data-hue="N"]`, which is
+// what `<Section hue>` renders. `<TierCard hue={N}>` renders `data-hue-bar={N}`, spine.css turns
+// that into `--tier-bar: var(--hue-N)`, and `.tier-card .tier-ico` paints `color: var(--on-dark)`
+// ON that background. So a real ink lands on a real hue ground through a path no [data-hue] block
+// and no [data-tone] selector appears in, and TONE_KEYED above cannot see it either, because the
+// selector is keyed on the GROUND rather than on the tone.
+//
+// THE THRESHOLD IS THE NORMAL-TEXT 4.5 AND NO NEW RULE IS ADDED HERE. A tier-ico ground carries an
+// ICON rather than body text, and WCAG puts non-text contrast at 3.0, so 4.5 is arguably strict
+// for it. Measured on zuidgeluid-site 2026-09-18, the three cells this finds are 1.72, 1.33 and
+// 2.06, which clear NEITHER threshold, so the threshold question does not decide any live cell and
+// a second threshold rule would be ceremony. It is raised in the PR that added this, not settled.
+//
+// A LIST A STRANGER CAN EXTEND, one line per carrier, each naming the component that renders the
+// attribute and the spine.css anchor that grounds it. `data-hue` is listed for completeness and
+// handled above, tone-aware, because its ink comes from the cascade rather than from a selector.
+// The sweep below this loop names any carrier the spine layer ships that is NOT in this list, so
+// the list decaying is a finding rather than a silence.
+const HUE_CARRIERS = [
+  { attr: "data-hue",     handledAbove: true,
+    source: "<Section hue> in src/components/spine/primitives.tsx -> [data-hue=\"N\"] in spine.css" },
+  { attr: "data-hue-bar", handledAbove: false,
+    source: "<TierCard hue> in src/components/spine/cards.tsx -> .tier-card[data-hue-bar=\"N\"] --tier-bar in spine.css" },
+];
+{
+  const css = stripComments(read(P.spineCss) || "");
+  // (i) which spine COMPONENTS render a hue carrier attribute, read from the spine layer rather
+  // than named here: a component renaming itself must not silently drop out of the scan.
+  const carrierTags = {};        // attr -> Set(componentName)
+  const shippedAttrs = new Set();
+  for (const f of walk(P.spineDir, [".tsx"])) {
+    const src = stripComments(read(f) || "");
+    for (const m of src.matchAll(/\bdata-hue[\w-]*\b/g)) shippedAttrs.add(m[0]);
+    const marks = [...src.matchAll(/export\s+(?:function|const)\s+([A-Z]\w*)/g)];
+    marks.forEach((m, i) => {
+      const body = src.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : src.length);
+      for (const a of body.matchAll(/\b(data-hue[\w-]*)\s*=/g)) {
+        (carrierTags[a[1]] ||= new Set()).add(m[1]);
+      }
+    });
+  }
+  // (ii) for each carrier that is not the [data-hue] cascade, learn the indirection property the
+  // attribute sets (--tier-bar), then score every selector that uses that property as a BACKGROUND
+  // and declares a colour. A selector with no colour (the 6px ::before rule) grounds no text and
+  // is not a pair.
+  const carrierPairs = [];
+  for (const c of HUE_CARRIERS) {
+    if (c.handledAbove) continue;
+    const tags = [...(carrierTags[c.attr] || [])];
+    const props = new Map();                 // hue number -> indirection property name
+    for (const m of css.matchAll(new RegExp("\\[" + c.attr + "=[\"']?(\\d+)[\"']?\\]\\s*\\{", "g"))) {
+      const start = m.index + m[0].length;
+      const end = css.indexOf("}", start);
+      if (end < 0) continue;
+      const d = css.slice(start, end).match(/(--[\w-]+)\s*:\s*var\(\s*--hue-(\d+)/);
+      if (d && d[2] === m[1]) props.set(m[1], d[1]);
+    }
+    if (!props.size) { note(`hue carrier ${c.attr}: no [${c.attr}="N"] block in spine.css resolves to a --hue-N slot; nothing to score (${c.source})`); continue; }
+    // which N values the MARKUP actually composes through one of this carrier's components
+    const used = new Set();
+    if (tags.length) {
+      const tagRe = new RegExp("<(" + tags.join("|") + ")\\b[\\s\\S]*?>", "g");
+      for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+        for (const tag of (stripComments(read(f) || "")).matchAll(tagRe)) {
+          const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
+          if (h) used.add(h[1]);
+        }
+      }
+    }
+    for (const n of [...used].sort()) {
+      const prop = props.get(n);
+      const hue = `--hue-${n}`;
+      if (!prop || (!T[hue] && !TA[hue])) continue;      // undeclared slot stays inert (S4.6)
+      composedHues.add(n);
+      for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const body = r[2];
+        if (!new RegExp("background(?:-color)?\\s*:\\s*var\\(\\s*" + prop + "\\b").test(body)) continue;
+        const ink = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
+        if (!ink) continue;                               // grounds no text: not a pair
+        carrierPairs.push([ink[1], hue, `${r[1].trim()} on ${c.attr}=${n} (${prop})`]);
+      }
+    }
+  }
+  for (const pr of carrierPairs) NORMAL_PAIRS.push(pr);
+  if (carrierPairs.length) note(`hue carriers beyond <Section hue>: ${carrierPairs.length} pair(s) added -- ` +
+    carrierPairs.map((x) => `${x[0]} on ${x[1]} via ${x[2]}`).join(" | "));
+  // (iii) the list decaying is a FINDING. Any data-hue* attribute the spine layer ships that no
+  // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
+  // carrier gets added instead of being missed.
+  const unlisted = [...shippedAttrs].filter((a) => !HUE_CARRIERS.some((c) => c.attr === a));
+  if (unlisted.length) note(`spine layer ships hue carrier attribute(s) HUE_CARRIERS does not name: ` +
+    `${unlisted.join(", ")} -- any ink on those grounds is UNSCORED. Add a line to HUE_CARRIERS in this file`);
 }
 if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
 // PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
@@ -926,7 +1070,15 @@ out.push("\n[8] INSTANTIATION -- the workflow's fill-ins are replaced, not inher
         return m ? m[1].replace(/#.*$/, "").trim().replace(/^["']|["']$/g, "").trim() : null;
       };
       const seedRepo = (val("SEED_REPO") || "").toLowerCase();
-      const isSeed = SEED_ROLE || (!!originRepo && !!seedRepo && originRepo === seedRepo);
+      // ONE LIST OF SEED NAMES, and it is CANON_SEED_REPOS at the top of this file (row 107). A
+      // repo that self-names in its own workflow is NOT thereby the seed: that is the copied env
+      // line [0](b) fails on, and granting it the carve-out here would restore the no-op by the
+      // other door -- the SEED_REF pin check below is the one this line decides.
+      const selfNamed = SEED_SELF_NAMED || (!!originRepo && !!seedRepo && originRepo === seedRepo);
+      const isSeed = selfNamed && isCanonSeed(seedRepo || originRepo);
+      if (selfNamed && !isSeed) bad(`${rel}: field SEED_REPO names THIS repository (${seedRepo}) and canon ` +
+        `does not declare it the seed: a site's SEED_REPO names the canon-declared seed and never itself ` +
+        `(as-site-spine-standard.md S8 rule 4). Set it to ${CANON_SEED_REPOS.join(" or ")}`);
       const seedRef = val("SEED_REF");
       const charterField = val("CHARTER");
       // (a) SEED_REF must be the full 40-char sha the charter pins -- except in the seed.
@@ -951,6 +1103,80 @@ out.push("\n[8] INSTANTIATION -- the workflow's fill-ins are replaced, not inher
       const ph = [...wf.matchAll(/^\s*([A-Z_]+)\s*:\s*(<[^>]+>|TODO\b.*|FIXME\b.*|CHANGEME\b.*|["']?xxx+["']?)\s*$/gim)].map((m) => `${m[1]}=${m[2].trim()}`);
       if (ph.length) bad(`${rel}: unreplaced placeholder field(s): ${ph.join(", ")}`);
     }
+  }
+}
+
+// == 9. S8 PER-LANE RECORD -- present, never proved ==
+// as-site-intake-standard.md S8 requires the brief to carry, per intake lane (S3), what that lane
+// CONSUMED and what it LOOKED FOR. It is a RECORD and not a verdict, and it is what replaced a
+// twice-refuted three-state table. Nothing read it: `lane`, `five lanes`, `enrichment` and `facts
+// lane` all returned ZERO across this file against a positive control of eight for `brandMark`, so
+// the new wording was exactly as unenforced as the wording it replaced.
+//
+// THE SHAPE IS DECLARE-THEN-ENFORCE, the same pattern as [5]'s ```routes block and [6]'s
+// brandMark: the brief declares the record in ONE fenced block and nothing outside it is read.
+// [5]'s own comment records what a scavenging parser cost when it read the whole document. The
+// grammar is stated in this repo's README beside this check, so a brief author has a source that
+// is not this file (row 098 F9).
+//
+//     ```lanes
+//     content: consumed=<what went in>; looked-for=<what it went looking for>
+//     facts: consumed=...; looked-for=...
+//     brand: consumed=...; looked-for=...
+//     enrichment: consumed=...; looked-for=...
+//     intent: consumed=none supplied; looked-for=scope and emphasis
+//     ```
+//
+// WHAT THIS CANNOT PROVE, stated in the check's own output rather than only here, because the
+// standard states the same limit rather than engineering around it: NOTHING HERE PROVES AN AGENT
+// WENT AND LOOKED. A lane that was never run and whose line was written anyway passes this check.
+// It proves the record EXISTS and names every lane, which is the half a document cannot do.
+//
+// OPT-IN BY --brief, AND THAT IS A BOUND RATHER THAN A PREFERENCE. The stamped workflow template
+// passes no --brief and this run may not move a stamped file, so arming the check by discovery
+// would red every site in the fleet on a field no template has yet been cut to carry. With no
+// --brief this section reports NOT ARMED and fails nothing.
+out.push("\n[9] S8 PER-LANE RECORD -- every intake lane has a record; the record is not proof");
+{
+  const LANES = ["content", "facts", "brand", "enrichment", "intent"];
+  if (!BRIEF) {
+    note("NOT ARMED: no --brief supplied, so the S8 per-lane record was not read. Arming it is one");
+    note("argument in the stamped gate workflow template (a site-contract cut), not a change here.");
+  } else if (!existsSync(BRIEF)) {
+    bad(`--brief ${BRIEF} was supplied but no such file exists`);
+  } else {
+    const br = read(BRIEF) || "";
+    const block = br.match(/```lanes\s*\n([\s\S]*?)```/);
+    if (!block) {
+      bad(`brief ${relative(ROOT, BRIEF)} has no \`\`\`lanes block -- add one with a line per intake ` +
+          `lane (${LANES.join(", ")}) in the form "<lane>: consumed=<...>; looked-for=<...>". ` +
+          `Nothing outside that block is read as a lane record (as-site-intake-standard.md S8)`);
+    } else {
+      const lines = block[1].split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+      const seenLanes = new Map();
+      for (const l of lines) {
+        const m = l.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
+        if (m) seenLanes.set(m[1].toLowerCase(), m[2].trim());
+      }
+      const absent = LANES.filter((l) => !seenLanes.has(l));
+      if (absent.length) bad(`brief omits the S8 record for lane(s): ${absent.join(", ")} (S3 names five lanes; a lane that came back thin still owes a record saying so)`);
+      const thin = [];
+      for (const l of LANES) {
+        if (!seenLanes.has(l)) continue;
+        const v = seenLanes.get(l);
+        const halves = [];
+        if (!/consumed\s*=\s*\S/i.test(v)) halves.push("consumed");
+        if (!/looked-for\s*=\s*\S/i.test(v)) halves.push("looked-for");
+        if (halves.length) thin.push(`${l} (no ${halves.join(", no ")})`);
+      }
+      if (thin.length) bad(`lane record(s) present but incomplete -- S8 requires BOTH halves: ${thin.join(", ")}`);
+      const strayLanes = [...seenLanes.keys()].filter((k) => !LANES.includes(k));
+      if (strayLanes.length) note(`\`\`\`lanes block declares name(s) S3 does not: ${strayLanes.join(", ")} -- read, not scored`);
+      if (!absent.length && !thin.length) ok(`all ${LANES.length} intake lanes carry an S8 record with both halves (${relative(ROOT, BRIEF)})`);
+    }
+    note("THIS CHECK CANNOT PROVE A LANE WAS RUN. It reads a record the builder wrote and asserts");
+    note("only that every lane has one with both halves; a lane never run whose line was written");
+    note("anyway passes here. The standard states the same limit rather than engineering around it.");
   }
 }
 
