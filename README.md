@@ -205,8 +205,10 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
   denominator. A colour the skin declares with a value `[2]` cannot read is dropped from its map and
   named, never scored at the base value.
 - **Every declared hue slot, whatever N (R110).** The `--hue-N` / `--hue-N-ink` and `--hue-N-text`
-  pairs are read from the slots the skin declares, not from a bound. The AA denominator's `derived`
-  count no longer carries four inert pairs per undeclared slot, and now counts the accent-ground pair.
+  pairs are read from the slots the skin declares, not from a bound, and a pair is derived only where
+  the map declares both its ink and its ground, so a slot with no `--hue-N-text` adds its ink pair
+  alone. The AA denominator's `derived` count no longer carries inert pairs a slot cannot assert, and
+  now counts the accent-ground pair.
 - **Hue grounds through a component prop or an inline style (R063).** A component anywhere under
   `src/` whose body writes a destructured prop as its `background` (zuidgeluid-site's
   `<IlluStage sheet>`) composes a ground wherever the markup passes it a flat `var(--hue-N)`, and so
@@ -214,7 +216,9 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
   component or the style declares and, for literal text inside the tag, the enclosing Section's ink.
   A gradient or `color-mix()` ground is named and not scored. The line also counts the
   `var(--hue-N)` references in the markup it did not place as a ground (fills, strokes, borders, or
-  values routed through data), and the AA denominator says how many slots each route composed.
+  values routed through data), and the AA denominator says how many slots each route composed. The
+  markup it reads is `src/content` and `src/routes`, and the line says so: every `var(--hue-N)` in a
+  site's own markup elsewhere under `src/`, outside the spine, is counted by file as not read.
 - **`[5]` reads route paths by TanStack Router's file convention (R111).** A directory and an
   unescaped `.` each end a segment (`takken.kapoenen.tsx` and `takken/kapoenen.tsx` are both
   `/takken/kapoenen`), `[x]` escapes, `index` and a final `route` are their parent's page, `_x`
@@ -226,7 +230,10 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
   extension), and `[11]` fails a build where a `public/` file that a built page links with
   `<a href>` (the crawl's own rule) is not byte-identical in the directory `netlify.toml` publishes
   (`dist/client` where none is set). An unlinked file is not compared, since a build plugin may
-  rewrite one on purpose (Nitro appends to `_headers`). With no publish directory it has verified
+  rewrite one on purpose (Nitro appends to `_headers`). A linked file with no copy at the same path
+  is named and not compared: the crawl only writes, so that is the build's layout, not this defect.
+  The seed's own `/website` page links `/og-card.png`, so `[11]` compares a real binary on every
+  build here, and a build without the filter fails it. With no publish directory it has verified
   nothing: a warning locally, a failure under `--ci`. The gate workflow builds in the step before the
   gate, so CI always has one.
 
@@ -247,6 +254,10 @@ W13's, and each site takes it at its resync.
 - **R109** (seed half) `vite.config.ts` crawls plain page paths only, and the new `[11]` fails a build
   whose published copy of a linked `public/` file differs from the source. Each site that sets
   `crawlLinks` takes the filter at its own resync.
+- **The code review of #25, folded.** A hue pair is derived only where its ink and ground are
+  declared (F1); `[11]` names a linked file with no copy rather than failing it (F2); the base
+  pass's slot note names the map (F4); the R063 line states its markup scope (F5); and the seed's
+  `/website` page links `/og-card.png`, the one instance change, so `[11]` has a live denominator (F6).
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W13: the spine defects and the hue slots)
 

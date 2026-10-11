@@ -34,6 +34,13 @@
 // published build (R109). Run against the verify.mjs of main before that run, 33 of these 35
 // assertions FAIL; the two that hold there are marked REGRESSION GUARD.
 //
+// FOLDED the same day from the code review of PR #25, each finding with its own plant and control:
+// C13 a hue pair derived only where the map declares its ink and its ground (F1), and the base
+// pass's slot note naming the map rather than a skin (F4); C15 the R063 line stating its markup
+// scope and counting var(--hue-N) outside it by file (F5); C16 a linked file with no copy at the
+// same path named and not failed, beside a rewrite that still fails (F2). Run against #25's head
+// before the fold, 7 of these 9 assertions FAIL; the two that hold there are marked REGRESSION GUARD.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -811,7 +818,10 @@ const SKIN = (body) => `[data-skin="nacht"]:root {\n${body}\n}\n`;
 }
 {
   // CONTROL: no skin block says so
-  expect("[2] says when tokens.css carries no skin", notes(run(build("skin-none", {})), "carries no [data-skin] block"));
+  const out = run(build("skin-none", {}));
+  expect("[2] says when tokens.css carries no skin", notes(out, "carries no [data-skin] block"));
+  // FOLD of #25's review, F4: the base pass has no skin, so its slot note speaks of the map it read
+  expect("and the base pass's slot note names the map, not a skin", lineOf(out, "hue slot pairs:").includes("every --hue-N the map declares"), lineOf(out, "hue slot pairs:"));
 }
 {
   // PLANT: a declared slot past the old bound (7) is gated; #ffffff on #8a8a8a is 3.45
@@ -821,6 +831,19 @@ const SKIN = (body) => `[data-skin="nacht"]:root {\n${body}\n}\n`;
   // CONTROL: the same slot with an ink that clears (#111111 on #8a8a8a is 5.47)
   const ok7 = run(build("hue-seven-ok", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n}") }));
   expect("and passes it with an ink that clears", passes(ok7, "--hue-7-ink on --hue-7 = 5.47"), lineOf(ok7, "--hue-7-ink"));
+}
+{
+  // FOLD of #25's review, F1. PLANT: a slot declaring --hue-7 and its ink but no --hue-7-text derives
+  // the one pair it can assert. #25's head derived the three text pairs too and asserted and named
+  // none of them (zuidgeluid-site: 51 derived, 48 asserted, 0 token(s) unresolvable).
+  const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) derived, (\d+) asserted/) || []).slice(1).map(Number);
+  const [d0, a0] = den(run(build("hue-partial-base", {})));
+  const [d1, a1] = den(run(build("hue-partial", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n}") })));
+  expect("[2] derives no pair for a --hue-N-text the map does not declare", d1 - d0 === 1 && a1 - a0 === 1, `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1}`);
+  // CONTROL, and a REGRESSION GUARD: the text twin declared, all four derived and asserted (#333333
+  // clears 4.5 on all three grounds)
+  const [d2, a2] = den(run(build("hue-partial-text", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n  --hue-7-text: #333333;\n}") })));
+  expect("and derives and asserts all four once the twin is declared", d2 - d0 === 4 && a2 - a0 === 4, `derived ${d0} -> ${d2}, asserted ${a0} -> ${a2}`);
 }
 {
   // PLANT: a slot only the SKIN declares is scored in the skin's pass
@@ -926,6 +949,24 @@ const PAGE = (body) => `export const Route = { head: () => ({ title: "Home" }) }
   expect("and counts the stroke as a reference it did not place", l.includes("1 of 2 var(--hue-N) reference(s)") && l.includes("src/routes/index.tsx (1)"), l);
 }
 {
+  // FOLD of #25's review, F5. PLANT: a hue ground in a site's own component markup outside src/content
+  // and src/routes is not placed, so the line states that scope and counts the markup's references by
+  // file as not read. The spine's own markup is not counted (its hue grounds are <Section hue>).
+  const out = run(build("ground-outside-scope", { files: {
+    "src/components/Banner.tsx": `export const Banner = () => <div style={{ background: "var(--hue-3)" }}>Hallo</div>;\n`,
+    "src/components/spine/Hue.tsx": `export const Hue = () => <div style={{ background: "var(--hue-3)" }} />;\n` } }));
+  const l = lineOf(out, "hue grounds through a component prop or an inline style");
+  expect("[2] counts var(--hue-N) in markup outside src/content and src/routes as not read, by file",
+    l.includes("markup elsewhere under src/ outside the spine is not read, 1 var(--hue-N) reference(s) there: src/components/Banner.tsx (1)"), l);
+  // REGRESSION GUARD, not a control: #25's head counted no markup outside the scope at all
+  expect("and does not count the spine's own markup", !l.includes("spine/Hue.tsx"), l);
+  // CONTROL: with no such markup the clause still states the scope, at zero
+  const ok0 = lineOf(run(build("ground-in-scope", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="paper"><IlluStage sheet="var(--hue-3)"><img src="/x.svg" alt="" /></IlluStage></Section>`) })), "hue grounds through");
+  expect("and states the scope at zero where there is none", ok0.includes("(src/content, src/routes) placed as a ground") &&
+    ok0.includes("not read, 0 var(--hue-N) reference(s) there"), ok0);
+}
+{
   // an undeclared slot stays inert (S4.6), as it does through a carrier
   const out = run(build("ground-undeclared", { files: { "src/content/ui.tsx": UI },
     indexTsx: PAGE(`<Section tone="dark"><IlluStage sheet="var(--hue-2)"><p>t</p></IlluStage></Section>`) }));
@@ -948,9 +989,21 @@ const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="
   expect("[11] FAILS a linked copy that differs from its source, and names it", fails(out, "dist/client copy differs from its public/ source for linked file(s): menu.pdf"), lineOf(out, "linked file(s)"));
 }
 {
-  // PLANT: a linked public/ file with no copy in the build
+  // FOLD of #25's review, F2. A linked public/ file with no copy at the same path is the build's
+  // layout, not the crawl's rewrite (the crawl only writes): named and not compared, never failed
   const out = run(build("dist-absent", { files: { "public/menu.pdf": PDF, "dist/client/index.html": LINKS } }));
-  expect("[11] FAILS a linked public/ file missing from dist/client", fails(out, "linked public/ file(s) missing from dist/client: menu.pdf"), lineOf(out, "missing from"));
+  expect("[11] names a linked public/ file with no copy in dist/client and fails nothing",
+    notes(out, "linked public/ file(s) with no copy at the same path in dist/client, so not compared: menu.pdf") && !verdicts(out, "FAIL").length,
+    lineOf(out, "menu.pdf") + " | " + verdicts(out, "FAIL").join(" | "));
+  expect("and its pass line counts only what it compared", passes(out, "0 public/ file(s) linked from 1 built page(s) are byte-identical"), lineOf(out, "built page(s)"));
+}
+{
+  // PLANT: an absent copy beside a rewritten one still FAILS the rewrite, and names the absent one
+  const out = run(build("dist-absent-rewritten", { files: { "public/menu.pdf": PDF, "public/kaart.pdf": PDF,
+    "dist/client/index.html": LINKS.replace('<a href="/plans', '<a href="/kaart.pdf">Kaart</a> <a href="/plans'),
+    "dist/client/kaart.pdf": Buffer.from(PDF.toString("utf8"), "utf8") } }));
+  expect("[11] FAILS the rewritten copy beside an absent one", fails(out, "dist/client copy differs from its public/ source for linked file(s): kaart.pdf") &&
+    notes(out, "so not compared: menu.pdf"), lineOf(out, "linked file(s)") + " | " + lineOf(out, "not compared"));
 }
 {
   // CONTROL: a file no page links is not the crawl's to overwrite, and a build plugin may rewrite it
@@ -979,7 +1032,8 @@ console.log("2026-10-11 (C7 field edge R121, C8 crumb inks R122, C9 six hue slot
 console.log("carriers R120, C11 [10] phone menu R125), and the fold of #24's review (C7 focus edge, C8 accent");
 console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview card and og:locale R221), and brief W14");
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
-console.log("C16 [11] build output R109).");
+console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
+console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

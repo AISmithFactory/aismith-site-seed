@@ -771,9 +771,20 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
   // own props is not visible to this reading of the markup; the last clause of the line below counts
   // every `var(--hue-N)` in the markup the resolver did not place as a ground, so that limit is a
   // number on the page rather than a silence.
+  //
+  // THAT COUNT HAS A SCOPE, AND THE LINE STATES IT (the code review of #25, F5). The markup read for
+  // grounds is src/content and src/routes, while the components are read from all of src/. A ground
+  // composed in a site's own markup elsewhere under src/ (a src/components/** outside the spine) is
+  // neither placed nor counted above, so the line names the scope and counts every `var(--hue-N)` in
+  // that markup by file as not read: the guard's own denominator is on the page with its edge.
   {
     const markupFiles = [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])];
     const slotRef = /var\(\s*--hue-\d+\s*[,)]/g;
+    const outsideScope = walk(join(ROOT, "src"), [".tsx"])
+      .filter((f) => !markupFiles.includes(f) && relative(P.spineDir, f).startsWith(".."))
+      .map((f) => [relative(ROOT, f).replace(/\\/g, "/"), (stripComments(read(f) || "").match(slotRef) || []).length])
+      .filter(([, k]) => k > 0);
+    const notRead = outsideScope.reduce((a, [, k]) => a + k, 0);
     // (i) the components that write a prop as their background, wherever under src/ they are defined
     const grounders = new Map();   // name -> { file, props, inks }
     for (const f of walk(join(ROOT, "src"), [".tsx"])) {
@@ -887,12 +898,14 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
       .map((rel) => [rel, (stripComments(read(join(ROOT, rel)) || "").match(slotRef) || []).length - (placed.get(rel) || 0)])
       .filter(([, k]) => k > 0);
     const left = unplaced.reduce((a, [, k]) => a + k, 0);
-    if (refs || grounders.size) note(`hue grounds through a component prop or an inline style (R063): ` +
+    if (refs || grounders.size || notRead) note(`hue grounds through a component prop or an inline style (R063): ` +
       `${viaBySlot.size} slot(s) composed${viaBySlot.size ? ` (${[...viaBySlot].map(([n, v]) => `--hue-${n} via ${[...v].join(" and ")}`).join("; ")})` : ""}, ` +
       `${pairs.size} pair(s) added, ${nonFlat.length} ground(s) that are not one flat slot named and not scored` +
       `${nonFlat.length ? ` (${nonFlat.join(" | ")})` : ""}; ${refs - left} of ${refs} var(--hue-N) reference(s) in the ` +
-      `content and route markup placed as a ground` + (left ? `, the other ${left} a fill, a stroke, a border or an ink, or ` +
-      `routed through data this reading does not follow: ${unplaced.map(([r, k]) => `${r} (${k})`).join(", ")}` : ""));
+      `content and route markup (src/content, src/routes) placed as a ground` + (left ? `, the other ${left} a fill, a stroke, ` +
+      `a border or an ink, or routed through data this reading does not follow: ${unplaced.map(([r, k]) => `${r} (${k})`).join(", ")}` : "") +
+      `; markup elsewhere under src/ outside the spine is not read, ${notRead} var(--hue-N) reference(s) there` +
+      (notRead ? `: ${outsideScope.map(([r, k]) => `${r} (${k})`).join(", ")}` : ""));
   }
   if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
   // PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
@@ -1082,13 +1095,22 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
   // later, so the slot numbers are read out of the skin: any --hue-N, --hue-N-ink or --hue-N-text it
   // declares puts N in the loop, and a slot the skin declares nothing for adds no pair at all, where
   // the bounded loop added four inert ones per slot to the derived count.
+  //
+  // AND A PAIR, NOT ONLY A SLOT (the code review of #25, F1). A slot declaring --hue-N and its ink
+  // but no --hue-N-text still pushed its three text pairs, which the loop below drops as undeclared
+  // (inert by S4.6, not a skip): counted as derived, never asserted, never named, while the line read
+  // `0 token(s) unresolvable`. Measured on zuidgeluid-site, which declares no --hue-2-text: 51 derived,
+  // 48 asserted. So a pair is derived only where the map declares both its ink and its ground; a
+  // declared token [2] cannot read still reaches the loop and is named there as a skip.
   const declaredSlots = [...new Set([...Object.keys(T), ...Object.keys(TA)]
     .map((name) => (name.match(/^--hue-(\d+)(?:-ink|-text)?$/) || [])[1]).filter(Boolean).map(Number))].sort((a, b) => a - b);
+  const declares = (tok) => Boolean(T[tok] || TA[tok]);
   for (const n of declaredSlots) {
-    NORMAL_PAIRS.push([`--hue-${n}-ink`, `--hue-${n}`]);
-    NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
+    for (const [fg, bg] of [[`--hue-${n}-ink`, `--hue-${n}`],
+      [`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]])
+      if (declares(fg) && declares(bg)) NORMAL_PAIRS.push([fg, bg]);
   }
-  note(`hue slot pairs: every --hue-N the skin declares is gated, whatever N (R110): ` +
+  note(`hue slot pairs: every --hue-N the map declares is gated, whatever N (R110): ` +
     (declaredSlots.length ? declaredSlots.map((n) => `--hue-${n}`).join(", ") : "none declared"));
   let aaChecked = 0;
   // the accent-ground pair is asserted by its own loop below, at 3.0, and is derived all the same; the
@@ -1923,6 +1945,14 @@ out.push("\n[10] PHONE MENU -- a nav item's children are reachable in the open p
 // plugin may rewrite one on purpose (Nitro appends its fallback to `_headers`), and that is not this
 // defect. It reads the build the gate workflow makes in the step before this one; with no publish
 // directory to read it has verified nothing, so that is soft(): a warning locally, a failure under --ci.
+//
+// A LINKED FILE WITH NO COPY AT THE SAME PATH IS NAMED, NOT FAILED (the code review of #25, F2). The
+// crawl only writes (`mkdir` then `writeFile`, it deletes nothing), so a missing copy cannot be the
+// defect this section reads for: it says the publish directory does not mirror public/ at the same
+// relative path, which is a build-layout fact, and failing it would redden a site whose host lays the
+// build out differently for no R109 reason. So it is compared only where the copy exists, and the
+// rest is a note with the files by name. A broken-download check, if one is wanted, is its own
+// assertion with its own operand.
 out.push("\n[11] BUILD OUTPUT -- a public/ file a built page links reaches the published build byte for byte");
 {
   const pub = join(ROOT, "public");
@@ -1953,9 +1983,10 @@ out.push("\n[11] BUILD OUTPUT -- a public/ file a built page links reaches the p
     if (differ.length) bad(`${publish} copy differs from its public/ source for linked file(s): ${differ.join(", ")}. The ` +
       `prerender crawl fetched each as a page and wrote the response over it as text; filter such paths out of the ` +
       `crawl (vite.config.ts prerender.filter) (R109)`);
-    if (absent.length) bad(`linked public/ file(s) missing from ${publish}: ${absent.join(", ")} (R109)`);
+    if (absent.length) note(`linked public/ file(s) with no copy at the same path in ${publish}, so not compared: ` +
+      `${absent.join(", ")}. The crawl only writes, so this is the build's layout, not the crawl's rewrite (R109)`);
     if (!pages.length) note(`${publish} holds no prerendered page, so no crawl wrote there and no linked public/ file is compared (R109)`);
-    else if (!differ.length && !absent.length) ok(`${linked.size} public/ file(s) linked from ${pages.length} built page(s) ` +
+    else if (!differ.length) ok(`${linked.size - absent.length} public/ file(s) linked from ${pages.length} built page(s) ` +
       `are byte-identical in ${publish} (R109)`);
   }
 }

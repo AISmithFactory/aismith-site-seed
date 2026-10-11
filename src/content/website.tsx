@@ -32,6 +32,10 @@ export function Website() {
           <InfoCard k="Public website" v="What the world sees: pages, news, sign-ups." />
           <InfoCard k="Your hub" v="What runs the place: the operation behind it." />
         </div>
+        {/* A linked public/ binary, so verify.mjs [11] compares a real file on every build (R109) */}
+        <div className="actions" style={{ marginTop: 26 }}>
+          <Btn variant="ghost" href="/og-card.png">See the preview card a shared link shows &rarr;</Btn>
+        </div>
       </Section>
 
       <Section tone="paper">
