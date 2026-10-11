@@ -29,7 +29,12 @@ async function postJson(action: string, data: Record<string, string>) {
 // `contactEmail` is OPTIONAL because a required prop would break every mounting site's
 // build on the pin bump; without it the default failure copy states the failure and asks
 // for a retry rather than naming a mail path the component was not given.
-export function ContactForm({ action, fields, submitLabel = "Send", done = "Thanks, we'll be in touch.", honeypot = "company",
+//
+// THE HONEYPOT DEFAULTS TO `honeypot` (R197), the one key the shared `contact` function
+// drops a POST on. It defaulted to `company`, which the function does not reserve, so a
+// bot's filled field was folded into the mail and delivered. The function is deliberately
+// NOT taught `company` (ruling 2026-10-04): a tenant form may ask for a real company field.
+export function ContactForm({ action, fields, submitLabel = "Send", done = "Thanks, we'll be in touch.", honeypot = "honeypot",
   contactEmail, failed }:
   { action: string; fields: Field[]; submitLabel?: string; done?: string; honeypot?: string | false;
     contactEmail?: string; failed?: React.ReactNode }) {

@@ -75,6 +75,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .em-hue-3 { color: var(--hue-3-text, currentColor); }
 .em-hue-4 { color: var(--hue-4-text, currentColor); }
 .em-hue-5 { color: var(--hue-5-text, currentColor); }
+.em-hue-6 { color: var(--hue-6-text, currentColor); }
 
 /* ---- S3.2a type roles -- STANDALONE classes -------------------------------
    A spine type role is a STANDALONE class; a component may compose it, it must not
@@ -133,12 +134,35 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
    A SKIN that declares --hue-N (+ --hue-N-ink, optional --hue-N-soft) in
    tokens.css re-grounds any [data-hue="N"] section in that hue; undeclared
    slots fall back to the tone (tone = register, hue = brand family).
-   Every declared --hue-N / --hue-N-ink pair must clear WCAG AA (S2). */
+   Every declared --hue-N / --hue-N-ink pair must clear WCAG AA (S2).
+   SIX SLOTS (R112): a site with six categories needs six, and sz-site's six takken
+   reached --hue-6 only through an inline var() marked delete-on-fold. Every hue-keyed
+   family below carries all six (the slots, .em-hue-N, data-hue-bar, data-hue-tint), and
+   verify.mjs [2] fails a family that drops one. */
 [data-hue="1"] { --sec-accent: var(--hue-1-accent, var(--tone-accent)); --sec-bg: var(--hue-1, var(--tone-bg)); --sec-text: var(--hue-1-ink, var(--tone-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="2"] { --sec-accent: var(--hue-2-accent, var(--tone-accent)); --sec-bg: var(--hue-2, var(--tone-bg)); --sec-text: var(--hue-2-ink, var(--tone-text)); --sec-soft: var(--hue-2-soft, var(--hue-2-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="3"] { --sec-accent: var(--hue-3-accent, var(--tone-accent)); --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="4"] { --sec-accent: var(--hue-4-accent, var(--tone-accent)); --sec-bg: var(--hue-4, var(--tone-bg)); --sec-text: var(--hue-4-ink, var(--tone-text)); --sec-soft: var(--hue-4-soft, var(--hue-4-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
 [data-hue="5"] { --sec-accent: var(--hue-5-accent, var(--tone-accent)); --sec-bg: var(--hue-5, var(--tone-bg)); --sec-text: var(--hue-5-ink, var(--tone-text)); --sec-soft: var(--hue-5-soft, var(--hue-5-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+[data-hue="6"] { --sec-accent: var(--hue-6-accent, var(--tone-accent)); --sec-bg: var(--hue-6, var(--tone-bg)); --sec-text: var(--hue-6-ink, var(--tone-text)); --sec-soft: var(--hue-6-soft, var(--hue-6-ink, var(--tone-soft))); background: var(--sec-bg); color: var(--sec-text); }
+
+/* ---- a hue as a BAND or TINT, without grounding (R120) ---------------------
+   [data-hue] above GROUNDS whatever carries it: it sets background, color and the four
+   --sec-* inks, so a wrapper that wanted a hue only for a stripe or a light wash handed the
+   hue's full inks to its children (sz-site's tak cards rendered white text on a tint).
+   [data-hue-tint="N"] is the declared way to borrow a hue WITHOUT that: it sets ONE custom
+   property, --hue-tint, and nothing else. No background, no color, no --sec-*, so the
+   element keeps the ground and the inks it already had. A band or tint reads the property,
+   e.g. `border-top: 6px solid var(--hue-tint)` or a color-mix() wash in the site's own
+   composition. Precedent: .tier-card[data-hue-bar] (--tier-bar), which already keys a hue
+   without grounding. An undeclared slot falls back to --accent, as --tier-bar does.
+   verify.mjs [2] fails a [data-hue-tint] block that sets a ground or an ink. */
+[data-hue-tint="1"] { --hue-tint: var(--hue-1, var(--accent)); }
+[data-hue-tint="2"] { --hue-tint: var(--hue-2, var(--accent)); }
+[data-hue-tint="3"] { --hue-tint: var(--hue-3, var(--accent)); }
+[data-hue-tint="4"] { --hue-tint: var(--hue-4, var(--accent)); }
+[data-hue-tint="5"] { --hue-tint: var(--hue-5, var(--accent)); }
+[data-hue-tint="6"] { --hue-tint: var(--hue-6, var(--accent)); }
 
 /* ---- the hue-ink rule (operator ruling 2026-09-06) ------------------------
    ONE rule, keyed by SELECTOR, for the two selectors that held out against it.
@@ -297,6 +321,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); }
 .tier-card[data-hue-bar="4"] { --tier-bar: var(--hue-4, var(--accent)); }
 .tier-card[data-hue-bar="5"] { --tier-bar: var(--hue-5, var(--accent)); }
+.tier-card[data-hue-bar="6"] { --tier-bar: var(--hue-6, var(--accent)); }
 .tier-card .tier-ico { width: 46px; height: 46px; border-radius: 50%; display: flex;
   align-items: center; justify-content: center; background: var(--tier-bar, var(--accent));
   color: var(--on-dark); }
@@ -352,9 +377,14 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   padding: clamp(22px, 3vw, 32px); box-shadow: var(--shadow); }
 .form-card label { display: block; font-weight: 700; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); margin: 14px 0 5px; }
 .form-card label:first-of-type { margin-top: 0; }
+/* The field EDGE is the control's only boundary, so WCAG 1.4.11 owes it 3.0 against the field
+   AND against the card it sits in. --line is the rule-and-divider token and measured 1.27 and
+   1.38 on this seed's skin (R121), so the edge reads --line-input, a skin token that clears 3.0
+   on both grounds; a skin that has not declared it falls back to --text-soft, which already
+   clears 4.5 there. agents/site/verify.mjs [2] scores the edge against both grounds. */
 .form-card input, .form-card textarea, .form-card select {
   width: 100%; font-family: var(--font-body); font-size: 15px; color: var(--text);
-  background: var(--bg); border: 2px solid var(--line); border-radius: 11px; padding: 11px 13px; outline: none; transition: border-color .18s; }
+  background: var(--bg); border: 2px solid var(--line-input, var(--text-soft)); border-radius: 11px; padding: 11px 13px; outline: none; transition: border-color .18s; }
 .form-card input:focus, .form-card textarea:focus, .form-card select:focus { border-color: var(--accent); }
 .form-card textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
 .form-card .btn { margin-top: 18px; }
@@ -396,7 +426,12 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase;
   color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
 /* .crumb a ink: the hue-ink rule below the S4.6 hue slots. Its tone-keyed arm is RETIRED. */
-.crumb a:hover { color: var(--accent); }
+/* HOVER reads the crumb's OWN accent chain, never --accent (R122). --accent is a FILL token, and
+   this is 12.5px text, so 4.5 is owed: --accent measured 3.81 on this seed's --bg. The chain is
+   --accent-text on the light tones (5.42 on --bg), --accent-on-dark on dark and slate, and the
+   hue's accent on a hue ground, which is every ground a crumb sits on. verify.mjs [2] scores
+   each crumb rule on each of those grounds. */
+.crumb a:hover { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
 
 /* ---- responsive -----------------------------------------------------------*/
 @media (max-width: 900px) {
@@ -406,6 +441,21 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
     position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); border-top: 1px solid var(--line);
     box-shadow: var(--shadow); padding: 10px var(--gutter) 18px; }
   .header.nav-open .nav a { padding: 13px 4px; font-size: 16px; border-bottom: 1px solid var(--line); }
+  /* THE OPEN PHONE MENU SHOWS A NAV ITEM'S CHILDREN (R125). A .submenu is a hover/focus-within
+     dropdown, and its parent is itself a link, so on a touch screen the tap that fades the
+     dropdown in is also the click that leaves the page. In the open phone menu each .navitem is
+     a block, its ::after hover bridge is hidden, and each .submenu is static, always shown and
+     indented 18px under its parent, which stays its own link. The desktop dropdown above is
+     untouched. The column scrolls inside the viewport, because the header is sticky and a menu
+     taller than the screen would otherwise leave its last links out of reach. verify.mjs [10]
+     fails a spine.css whose open phone menu does not do this. */
+  .header.nav-open .nav { max-height: calc(100vh - 68px); max-height: calc(100dvh - 68px); overflow-y: auto; overscroll-behavior: contain; }
+  .header.nav-open .nav .navitem { display: block; }
+  .header.nav-open .nav .navitem::after { display: none; }
+  .header.nav-open .nav .navitem > a { display: flex; }
+  .header.nav-open .nav .submenu { position: static; opacity: 1; visibility: visible; transform: none;
+    min-width: 0; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0 0 0 18px; transition: none; }
+  .header.nav-open .nav .submenu a { white-space: normal; }
   .band .wrap { grid-template-columns: 1fr; }
   .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
   .grid-2 { grid-template-columns: 1fr; }

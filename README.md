@@ -40,7 +40,7 @@ in over it.
   the charter forbids and the audit fails. (This is the inverse of the hub lesson, where
   you *connect* Supabase first.) Only an anon-view read-pipe site connects anything, and
   then only the hub's existing project, read-only.
-- `__root.tsx` owns the document shell here: it hard-sets `<html lang="en">` and renders
+- `__root.tsx` owns the document shell here: it hard-sets `<html lang="en-GB">` and renders
   `HeadContent` + `Scripts`. Do not let the scaffold supply a second shell.
 - **Attach every markup file via paperclip; never paste it inline.** Lovable strips
   angle-brackets from pasted text, so all `.tsx` files (and `site.config.tsx` with its
@@ -149,5 +149,75 @@ line per markup attribute that puts a `--hue-N` slot under something: `data-hue`
 handled through the `[data-hue]` cascade) and `data-hue-bar` (`<TierCard hue>`, whose
 `.tier-card .tier-ico` hardcodes `color: var(--on-dark)` on that ground). **Extend it by adding a
 line**, naming the component that renders the attribute and the `spine.css` anchor that grounds it.
-A `data-hue*` attribute the spine layer ships that no entry names is reported as UNSCORED rather
-than silently skipped, so the list decaying is a finding.
+A `data-hue*` attribute that no entry names is reported as UNSCORED rather than silently skipped,
+so the list decaying is a finding. The sweep reads the spine components, every attribute selector
+in `spine.css` and the content and route markup, because a carrier need not have a component
+(`data-hue-tint` has none by design). `HUE_FAMILIES` decays the same way: a family `spine.css` keys
+on a hue number, by attribute or by class (`.x-hue-N`), that no entry matches is named, since its
+slot count is otherwise unchecked.
+
+Each entry also says whether the attribute's own block may ground what carries it (`grounds`).
+`data-hue` does. `data-hue-bar` and `data-hue-tint` (R120, the declared way to borrow a hue as a
+band or tint) are `grounds: false`: their blocks set one indirection property and nothing else, and
+`[2]` FAILS such a block that sets `background`, `color` or any `--sec-*`, in the valued form
+(`[data-hue-tint="3"]`) and the bare one (`[data-hue-tint]`). A slot a carrier composes is read from
+a component's `hue` prop or from the attribute written on an element directly.
+
+### What `[2]`, `[4]` and `[10]` gained on 2026-10-11 (brief W13 and its review fold)
+
+Each one has a planted negative and a green control in `verify.selftest.mjs` (C7 to C12).
+
+- **Form field edge, 3.0 (R121, WCAG 1.4.11).** The `.form-card input` border token, flattened over
+  the field's own background, is scored against the field and against the card (`.form-card`'s
+  background and every `[data-card-ground]` override). The `:focus` rule's border token is scored
+  against the same grounds, because the rest rule sets `outline: none` and that border is the only
+  focus indicator. Every operand is read out of `spine.css`.
+- **Crumb inks, 4.5 (R122).** `SECTION_INK_RULES` lists the rules that paint text directly on the
+  section ground (`.crumb`, `.crumb a`, `.crumb a:hover`). Each `color` is resolved as the cascade
+  resolves it on every tone ground and every composed hue cell. Extend it by a line. On the
+  **accent** ground (large display only by S2.3/S4.3, and a crumb is 12.5px text) the pairs are
+  asserted when a `<Crumb>` is composed in an accent-tone Section, and otherwise printed with their
+  ratios as an advisory line, never dropped.
+- **The AA denominator** says how many DISTINCT ink/ground pairs the assertions cover, since a pair
+  two labels reach is asserted twice.
+- **Six hue slots (R112).** `HUE_SLOTS` is 6, and every family in `HUE_FAMILIES` (`[data-hue]`,
+  `.em-hue-N`, `data-hue-bar`, `data-hue-tint`) must carry all six.
+- **`[4]` the link-preview card (R221).** Where `site.config` declares `og.image`, the file it names
+  under `public/` must exist, be under 300 KB, be 1200 x 630, and be what `og.type`, `og.width` and
+  `og.height` say it is (read from its PNG or JPEG header). A card on another host is REVIEW. And
+  `og.locale` must state the same language as the `<html lang>` `__root` hard-sets.
+- **`[10]` PHONE MENU (R125).** The media block that hides the desktop `.nav` and draws `.nav-open`
+  is found, and then every rule in the file whose selector ends at a `.nav-open` `.submenu` is read
+  through the cascade (`!important`, specificity, source order), at the top level or in any block
+  that can apply at phone width. Each `.submenu` must be static, shown, untransformed, indented under
+  its parent, displayed, and neither collapsed to no height nor clipped.
+
+## Release history
+
+Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W13: the spine defects and the hue slots)
+
+The Factory re-embeds this release at site-contract 1.8.31 (plan job K1), and each site takes it
+at its resync, in that order.
+
+- **R121** `.form-card` fields draw their edge in `--line-input` (falling back to `--text-soft`):
+  3.72 against the field and 4.05 against the card on this skin, was 1.27 and 1.38 in `--line`.
+- **R122** `.crumb a:hover` reads the crumb's own accent chain, `--accent-text` on the light tones
+  (5.42 on `--bg`), where it painted `--accent` (3.81).
+- **R123** The gallery lightbox takes `closeLabel`, `prevLabel` and `nextLabel` props, steps through
+  the open category's photos by buttons and the arrow keys, and keeps focus inside the dialog.
+- **R125** In the open phone menu each `.submenu` is static, shown and indented under its parent.
+- **R112** Six hue slots in every hue-keyed family, and `hue` props typed 1 to 6.
+- **R120** `data-hue-tint="N"` borrows a hue as a band or tint without grounding or setting inks.
+- **R197** `ContactForm`'s honeypot defaults to `honeypot`, the key the `contact` function drops.
+- **R221** (seed limb) The root head carries an absolute `og:image` with its type, width, height and
+  alt, plus `og:locale` and `twitter:card`, filled from `og` in `site.config`; a placeholder
+  `public/og-card.png` says on its face that it is one. `<html lang>` is `en-GB`, the language
+  `og:locale` `en_GB` states.
+- **The review fold of this release.** `[2]` scores the focused field edge (3.81, 4.15 and 3.19 on
+  this skin), the crumb inks on the accent ground (3.81 and 3.09, asserted once a crumb sits
+  there), the bare `[data-hue-tint]` form, and carriers and hue families that only `spine.css` or the
+  markup carries; its denominator names distinct pairs (16 of 26 assertions). `[4]` checks the
+  link-preview card against its bytes and `og:locale` against `lang`. `[10]` reads the cascade
+  across the file and asserts display, height and overflow.

@@ -70,10 +70,13 @@ charter now fails S8.4a at the gate.
   no hub edit-flow.
 
 ## SEO & assets (S7)
-- Per-route `head()` on every route (title, description, OG); `lang="en"` hard-set in
+- Per-route `head()` on every route (title, description, OG); `lang="en-GB"` hard-set in
   `__root`; `public/sitemap.xml` + `public/robots.txt` shipped.
-- **No `og:image` asset in the concept build** — OG is text-only. Add a branded 1200×630
-  card to `/public` and an `og:image` meta before launch (flagged in `__root` head()).
+- **The concept build ships a PLACEHOLDER link-preview card**, `public/og-card.png` (1200 x 630,
+  saying on its face that it is a placeholder), behind an ABSOLUTE `og:image` with its type,
+  width, height and alt, plus `og:locale` and `twitter:card` `summary_large_image`, all filled
+  from `og` and `site.canonicalHost` in `site.config` (R221). Replace the card with a branded
+  one under 300 KB, and its alt text, before launch.
 - `sitemap.xml`/`robots.txt` use `https://aismith.io` as the canonical host. The crawl is
   allowed on purpose so the `noindex` meta governs: `seo.noindex` (`site.config`) is the
   demo↔production switch — true on the shareable demo, false in production.

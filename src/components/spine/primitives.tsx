@@ -19,7 +19,7 @@ export function Wrap({
 }
 
 /** Section — the alternating-banner unit (S4). `tone` maps to tokens in tokens.css.
-    `hue` (S4.6, optional): a bounded secondary-palette slot 1-5. Each slot the SKIN
+    `hue` (S4.6, optional): a bounded secondary-palette slot 1-6. Each slot the SKIN
     declares in tokens.css (--hue-N + --hue-N-ink [+ --hue-N-soft], AA-gated pair)
     re-grounds the section in that hue; an undeclared slot falls back to the tone —
     tone = register, hue = brand family. `fx` layers decorative content (the deco
@@ -34,7 +34,7 @@ export function Section({
   children,
 }: {
   tone?: Tone;
-  hue?: 1 | 2 | 3 | 4 | 5;
+  hue?: 1 | 2 | 3 | 4 | 5 | 6;
   pad?: "sm" | "lg";
   id?: string;
   className?: string;
@@ -259,10 +259,10 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 export function Lead({ children }: { children: React.ReactNode }) {
   return <p className="lead">{children}</p>;
 }
-/** Em -- accent-coloured word. `hue` (1-5) colours the word in a declared
+/** Em -- accent-coloured word. `hue` (1-6) colours the word in a declared
     --hue-N-text instead (AA-gated skin slot; undeclared = inert, the word keeps the
     title colour). Light-ground device; on dark tones plain Em. */
-export function Em({ hue, children }: { hue?: 1 | 2 | 3 | 4 | 5; children: React.ReactNode }) {
+export function Em({ hue, children }: { hue?: 1 | 2 | 3 | 4 | 5 | 6; children: React.ReactNode }) {
   return <span className={hue ? `em-hue-${hue}` : "em"}>{children}</span>;
 }
 

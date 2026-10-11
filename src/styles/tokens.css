@@ -22,6 +22,7 @@
   --text-soft:     #5E574F;            /* soft secondary text (Anvil family, darkened to clear AA on Mist: 5.47) */
   --line:          rgba(30, 29, 27, .12);
   --line-soft:     rgba(30, 29, 27, .07);
+  --line-input:    rgba(30, 29, 27, .55);  /* form-field EDGE: 3.0 owed vs field + card (WCAG 1.4.11): 3.72 on Paper, 4.05 on white, 3.12 on Mist */
 
   --action:        #9E4E1E;            /* Ember Deep — CTA fill behind white text (5.42:1) */
   --action-strong: #7E3D15;            /* pressed / chunky shadow              */
@@ -55,7 +56,7 @@
   --tilt:       -1.2deg;              /* decorative rotation; set 0deg to disable */
 
   /* ---- OPTIONAL slots (declare only if the brand needs them) --------------
-     Secondary-palette hues (S4.6): up to five --hue-N / --hue-N-ink pairs
+     Secondary-palette hues (S4.6): up to six --hue-N / --hue-N-ink pairs
      (+ optional --hue-N-soft). Each declared pair must clear WCAG AA; the
      Section `hue` prop maps to them, undeclared slots fall back to the tone.
      AI Smith declares none (single-accent brand). Example (ZG family):

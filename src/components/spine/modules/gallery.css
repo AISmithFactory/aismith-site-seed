@@ -32,6 +32,14 @@
   border-radius: 50%; border: 0; cursor: pointer;
   background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .gal-close:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+/* previous / next (R123): the close button's own chip, centred on either edge */
+.gal-prev, .gal-next { position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.gal-prev { left: 18px; }
+.gal-next { right: 18px; }
+.gal-prev:focus-visible, .gal-next:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 900px) { .gal-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .gal-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) {

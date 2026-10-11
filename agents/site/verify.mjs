@@ -340,7 +340,7 @@ if (stray.length) bad(`stray stylesheet(s) under src/styles (only spine.css + to
 else ok("no stray stylesheets (spine.css + tokens.css only)");
 
 // == 2. AA MATRIX (spike correction 1: accent at 3.0 large, gated on accentUses) ==
-out.push("\n[2] AA MATRIX -- normal text 4.5; accent-as-text 3.0 (large), 4.5 only if small text");
+out.push("\n[2] AA MATRIX -- normal text 4.5; accent-as-text 3.0 (large), 4.5 only if small text; field edge 3.0 (non-text)");
 function lin(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
 function L(hex) {
   let h = hex.replace("#", "");
@@ -588,11 +588,21 @@ for (const cell of [...composed].sort()) {
 // handled above, tone-aware, because its ink comes from the cascade rather than from a selector.
 // The sweep below this loop names any carrier the spine layer ships that is NOT in this list, so
 // the list decaying is a finding rather than a silence.
+//
+// `grounds` SAYS WHETHER THE ATTRIBUTE'S OWN BLOCK MAY GROUND WHAT CARRIES IT (R120). `data-hue`
+// does by design: it sets background, color and the --sec-* inks. A carrier declared
+// `grounds: false` sets an indirection property and nothing else, so a selector that reads the
+// property grounds its own box (scored above) and the element carrying the attribute keeps its
+// ground and its inks. That is a PROPERTY OF THE SPINE, and it is asserted below: a `grounds:
+// false` block that sets background, color or any --sec-* is a FAIL, because a wrapper using the
+// hue only as a band or tint would hand the hue's inks to its children.
 const HUE_CARRIERS = [
-  { attr: "data-hue",     handledAbove: true,
+  { attr: "data-hue",     handledAbove: true,  grounds: true,
     source: "<Section hue> in src/components/spine/primitives.tsx -> [data-hue=\"N\"] in spine.css" },
-  { attr: "data-hue-bar", handledAbove: false,
+  { attr: "data-hue-bar", handledAbove: false, grounds: false,
     source: "<TierCard hue> in src/components/spine/cards.tsx -> .tier-card[data-hue-bar=\"N\"] --tier-bar in spine.css" },
+  { attr: "data-hue-tint", handledAbove: false, grounds: false,
+    source: "any element's data-hue-tint=\"N\" (R120) -> [data-hue-tint=\"N\"] --hue-tint in spine.css" },
 ];
 {
   const css = stripComments(read(P.spineCss) || "");
@@ -600,6 +610,13 @@ const HUE_CARRIERS = [
   // than named here: a component renaming itself must not silently drop out of the scan.
   const carrierTags = {};        // attr -> Set(componentName)
   const shippedAttrs = new Set();
+  // A carrier need not have a component: data-hue-tint (R120) is CSS plus an attribute written in
+  // markup, by design. So the sweep in (iii) also reads every attribute selector spine.css keys on
+  // and every data-hue* attribute the content and route markup writes, or it is blind to exactly
+  // the kind of carrier R120 introduced.
+  for (const m of css.matchAll(/\[(data-hue[\w-]*)/g)) shippedAttrs.add(m[1]);
+  for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])])
+    for (const m of stripComments(read(f) || "").matchAll(/\b(data-hue[\w-]*)\s*=/g)) shippedAttrs.add(m[1]);
   for (const f of walk(P.spineDir, [".tsx"])) {
     const src = stripComments(read(f) || "");
     for (const m of src.matchAll(/\bdata-hue[\w-]*\b/g)) shippedAttrs.add(m[0]);
@@ -628,15 +645,18 @@ const HUE_CARRIERS = [
       if (d && d[2] === m[1]) props.set(m[1], d[1]);
     }
     if (!props.size) { note(`hue carrier ${c.attr}: no [${c.attr}="N"] block in spine.css resolves to a --hue-N slot; nothing to score (${c.source})`); continue; }
-    // which N values the MARKUP actually composes through one of this carrier's components
+    // which N values the MARKUP actually composes through one of this carrier's components, or
+    // through the attribute written on an element directly (data-hue-tint has no component).
     const used = new Set();
-    if (tags.length) {
+    const rawRe = new RegExp("\\b" + c.attr + "\\s*=\\s*\\{?\\s*[\"'`]?(\\d+)", "g");
+    for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+      const src = stripComments(read(f) || "");
+      for (const a of src.matchAll(rawRe)) used.add(a[1]);
+      if (!tags.length) continue;
       const tagRe = new RegExp("<(" + tags.join("|") + ")\\b[\\s\\S]*?>", "g");
-      for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
-        for (const tag of (stripComments(read(f) || "")).matchAll(tagRe)) {
-          const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
-          if (h) used.add(h[1]);
-        }
+      for (const tag of src.matchAll(tagRe)) {
+        const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
+        if (h) used.add(h[1]);
       }
     }
     for (const n of [...used].sort()) {
@@ -660,8 +680,30 @@ const HUE_CARRIERS = [
   // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
   // carrier gets added instead of being missed.
   const unlisted = [...shippedAttrs].filter((a) => !HUE_CARRIERS.some((c) => c.attr === a));
-  if (unlisted.length) note(`spine layer ships hue carrier attribute(s) HUE_CARRIERS does not name: ` +
+  if (unlisted.length) note(`spine layer or markup carries hue carrier attribute(s) HUE_CARRIERS does not name: ` +
     `${unlisted.join(", ")} -- any ink on those grounds is UNSCORED. Add a line to HUE_CARRIERS in this file`);
+  // (iv) A NON-GROUNDING CARRIER SETS NO GROUND AND NO INK (R120). Every block whose selector
+  // carries the attribute of a `grounds: false` carrier is read, valued ([attr="N"]) or BARE
+  // ([attr]), whatever selector it is compounded with, and any background, color or --sec-* it
+  // sets is named. Without this the declared way to borrow a hue as a band or tint is a comment,
+  // and one added line turns it back into the [data-hue] behaviour it replaces. The bare form is
+  // the likelier line, since one `[data-hue-tint] { ... }` grounds every slot at once.
+  const nonGrounding = HUE_CARRIERS.filter((c) => c.grounds === false);
+  const groundingHits = [];
+  let blocksRead = 0;
+  for (const c of nonGrounding) {
+    for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!new RegExp("\\[" + c.attr + "(?![\\w-])").test(r[1])) continue;
+      blocksRead++;
+      const set = [...r[2].matchAll(/(?:^|[;\s])(background(?:-color)?|color|--sec-[\w-]+)\s*:/g)].map((m) => m[1]);
+      if (set.length) groundingHits.push(`${r[1].trim()} sets ${[...new Set(set)].join(", ")}`);
+    }
+  }
+  if (groundingHits.length) bad(`non-grounding hue carrier block(s) set a ground or an ink, so whatever carries the ` +
+    `attribute is grounded in the hue and hands its inks to its children (R120): ${groundingHits.join(" | ")}`);
+  else if (blocksRead) ok(`non-grounding hue carrier(s) ${nonGrounding.map((c) => c.attr).join(", ")} set no ground ` +
+    `and no ink (${blocksRead} block(s) read)`);
+  else note(`no block of a non-grounding hue carrier (${nonGrounding.map((c) => c.attr).join(", ")}) found in spine.css`);
 }
 if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
 // PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
@@ -697,16 +739,163 @@ if (composed.size) note(`tone x hue compositions found in markup: ${[...composed
 const ACCENT_LARGE_PAIRS = [
   ["--on-dark", "--accent"],
 ];
+// THE CRUMB'S INKS ON EVERY GROUND A CRUMB SITS ON (R122). `.crumb a:hover` painted --accent, a
+// FILL token, as 12.5px weight-800 text, where 4.5 is owed: 3.81 on this seed's --bg. No pair
+// above could see it, because the tone map scores the tone's own roles and a state rule that
+// reads a raw token is not one of them. So each rule below has its `color` READ OUT OF spine.css
+// and RESOLVED the way the cascade resolves it, on every tone ground and on every composed hue
+// cell, and scored at the normal-text 4.5. A LIST A STRANGER CAN EXTEND: one line per selector
+// that paints text directly on the section's ground.
+//
+// THE ACCENT GROUND IS SCORED TOO, and the reason it once was not was one word carrying two facts.
+// S2.3/S4.3 put --accent AS INK at large display only, which is why ACCENT_LARGE_PAIRS above is
+// 3.0. On the accent GROUND the crumb's inks are --on-dark and --on-dark-soft, and a crumb is
+// 12.5px text, so 4.5 is owed there like any small text on that ground (the accentSmallText rule
+// below). The pairs are ASSERTED when the markup composes a <Crumb> inside an accent-tone Section,
+// read by that rule's own 600-character window. Where none is composed they are printed with their
+// ratios as an advisory line and never silently dropped, in the shape of the UNCOMPOSED hue-slot
+// line: nothing renders them, and a gate that fails where nothing renders trains people to ignore
+// it. On this seed's skin no token clears 4.5 on --accent, so a crumb cannot sit there at all.
+const SECTION_INK_RULES = [
+  { selector: ".crumb",         source: "<Crumb> in primitives.tsx, the trail itself" },
+  { selector: ".crumb a",       source: "a crumb link at rest (the hue-ink rule)" },
+  { selector: ".crumb a:hover", source: "a crumb link on hover (R122)" },
+];
+// Resolve one `color` expression to the skin token the browser paints: --sec-* through the hue
+// block's own chain on a hue ground and through the tone block otherwise (a tone block sets no
+// --sec-accent, so that name falls through to the next in the chain), --tone-* through the tone.
+function resolveInk(expr, tone, n) {
+  if (!expr) return null;
+  for (const m of expr.matchAll(/(--[\w-]+)/g)) {
+    const sec = m[1].match(/^--sec-(bg|text|soft|accent)$/);
+    if (sec) {
+      if (n && HUE_BLOCKS[n]) { const r = resolveChain(HUE_BLOCKS[n][sec[1]], tone); if (r) return r; continue; }
+      if (sec[1] === "accent") continue;
+      const v = (TONE_BLOCKS[tone] || {})[sec[1]];
+      if (v && (T[v] || TA[v])) return v;
+      continue;
+    }
+    const r = resolveChain(m[1], tone);
+    if (r) return r;
+  }
+  return null;
+}
+{
+  const css = stripComments(read(P.spineCss) || "");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
+  // a <Crumb> composed inside an accent-tone Section, by the accentSmallText window below
+  let accentCrumb = false;
+  for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+    const body = stripComments(read(f) || "");
+    for (const m of body.matchAll(/tone=["']accent["']|data-tone=["']accent["']/g))
+      if (/<Crumb\b|className=["'][^"']*\bcrumb\b/.test(body.slice(m.index, m.index + 600))) accentCrumb = true;
+  }
+  const grounds = [];   // { tone, n, ground, held }
+  for (const [tone, b] of Object.entries(TONE_BLOCKS)) if (b.bg) grounds.push({ tone, n: null, ground: b.bg, held: tone === ACCENT_TONE && !accentCrumb });
+  for (const cell of [...composed].sort()) {
+    const [tone, n] = cell.split("|");
+    if ((T[`--hue-${n}`] || TA[`--hue-${n}`]) && HUE_BLOCKS[n]) grounds.push({ tone, n, ground: `--hue-${n}`, held: false });
+  }
+  // "ink|ground" -> cell -> selectors, so one pair painted by two rules is asserted once. A HELD
+  // ground (the accent ground with no crumb composed on it) collects into its own map.
+  const pairs = new Map();
+  const heldPairs = new Map();
+  const unread = [];
+  for (const r of SECTION_INK_RULES) {
+    // the LAST rule setting colour for the exact selector wins, as it does in the cascade
+    const hit = rules.filter((x) => x.sels.includes(r.selector) && /(?:^|[;\s])color\s*:/.test(x.body)).pop();
+    const expr = hit && (hit.body.match(/(?:^|[;\s])color\s*:\s*([^;]+)/) || [])[1];
+    if (!expr) { unread.push(r.selector); continue; }
+    for (const g of grounds) {
+      const ink = resolveInk(expr, g.tone, g.n);
+      if (!ink) continue;
+      const into = g.held ? heldPairs : pairs;
+      const key = `${ink}|${g.ground}`;
+      const cell = `tone=${g.tone}${g.n ? `, hue ${g.n} ground` : ""}`;
+      if (!into.has(key)) into.set(key, new Map());
+      if (!into.get(key).has(cell)) into.get(key).set(cell, []);
+      into.get(key).get(cell).push(r.selector);
+    }
+  }
+  // Worded apart from the TONE_KEYED label (`<selector> on hue N`), which fixtures.mjs forbids for
+  // a rule that reads --sec-*: a crumb rule here is SCORED, it is not reported as a divergence.
+  const label = (cells) => [...cells].map(([cell, sels]) => `crumb ink ${sels.join(" + ")}, ${cell}`).join("; ");
+  // A crumb pair can be one the tone map already asserts under its own label (the crumb's chain IS
+  // the tone's accent and soft ink on most grounds), so the count says how many are NEW pairs.
+  const already = new Set(NORMAL_PAIRS.map(([fg, bg]) => `${fg}|${bg}`));
+  let fresh = 0;
+  for (const [key, cells] of pairs) {
+    const [ink, ground] = key.split("|");
+    if (!already.has(key)) fresh++;
+    NORMAL_PAIRS.push([ink, ground, label(cells)]);
+  }
+  const heldLines = [];
+  for (const [key, cells] of heldPairs) {
+    const [ink, ground] = key.split("|");
+    const bgHex = T[ground];
+    const fgHex = bgHex && resolveColour(ink, bgHex);
+    if (!fgHex) continue;
+    const ratio = cr(fgHex, bgHex);
+    heldLines.push(`${ink} on ${ground} = ${ratio.toFixed(2)}${ratio < 4.5 ? " (< 4.5)" : ""} [${label(cells)}]`);
+  }
+  if (unread.length) soft(`crumb ink rule(s) not found in spine.css, so their inks are unscored: ${unread.join(", ")}`);
+  const heldGrounds = grounds.filter((g) => g.held).length;
+  note(`crumb inks: ${SECTION_INK_RULES.length} rule(s) x ${grounds.length - heldGrounds} ground(s) -> ${pairs.size} distinct pair(s) ` +
+       `added at 4.5 (${fresh} new to the matrix, ${pairs.size - fresh} already in it under another label)` +
+       (heldGrounds ? `; the ${ACCENT_TONE} ground is scored on the next line and not asserted` : ""));
+  if (heldLines.length) note(`crumb inks on the ${ACCENT_TONE} ground, NOT ASSERTED because no <Crumb> is composed in an ` +
+    `${ACCENT_TONE}-tone Section (a crumb is 12.5px text and owes 4.5 there the moment one is): ${heldLines.join(" | ")}`);
+  if (accentCrumb) note(`a <Crumb> is composed in an ${ACCENT_TONE}-tone Section, so its inks are asserted at 4.5 on the ${ACCENT_TONE} ground`);
+}
+
+// S4.6 SIX SLOTS IN EVERY HUE-KEYED FAMILY (R112). A site with six categories needs six slots, and
+// the spine had five, so sz-site reached its sixth tak through an inline var(--hue-6). The slot
+// count is ONE constant here, and every family spine.css keys on a hue number must carry all of
+// them: a family that stops at five is a site that cannot compose its sixth category in that form.
+// A LIST A STRANGER CAN EXTEND, one line per hue-keyed family. Standard S4.6 moves to six at the
+// Factory re-embed of this seed release; the seed leads by the brief's one-way order.
+const HUE_SLOTS = 6;
+const HUE_FAMILIES = [
+  { family: '[data-hue="N"]',      re: /\[data-hue=["']?(\d+)["']?\]/g,      source: "<Section hue>, the slot itself" },
+  { family: ".em-hue-N",           re: /\.em-hue-(\d+)\b/g,                  source: "<Em hue>, hue as text" },
+  { family: '[data-hue-bar="N"]',  re: /\[data-hue-bar=["']?(\d+)["']?\]/g,  source: "<TierCard hue>, the top bar" },
+  { family: '[data-hue-tint="N"]', re: /\[data-hue-tint=["']?(\d+)["']?\]/g, source: "a band or tint without grounding (R120)" },
+];
+{
+  const css = stripComments(read(P.spineCss) || "");
+  const short = [];
+  for (const f of HUE_FAMILIES) {
+    const have = new Set([...css.matchAll(f.re)].map((m) => +m[1]));
+    const missing = [];
+    for (let n = 1; n <= HUE_SLOTS; n++) if (!have.has(n)) missing.push(n);
+    if (missing.length) short.push(`${f.family} (${f.source}) lacks slot(s) ${missing.join(", ")}`);
+  }
+  if (short.length) bad(`spine.css does not carry all ${HUE_SLOTS} S4.6 hue slots in every hue-keyed family (R112): ${short.join(" | ")}`);
+  else ok(`spine.css carries all ${HUE_SLOTS} S4.6 hue slots in each of ${HUE_FAMILIES.length} hue-keyed families`);
+  // THE LIST DECAYING IS A FINDING HERE TOO, by the carrier sweep's rule above. Any family spine.css
+  // keys on a hue number, by attribute ([x-hue-y="N"]) or by class (.x-hue-N, which .em-hue-N proves
+  // exists), that no HUE_FAMILIES entry matches is a family whose slot count nothing checks.
+  const seen = new Map();   // family -> one selector that keys it
+  for (const m of css.matchAll(/\[([\w-]*hue[\w-]*)=["']?\d+["']?\]/g)) if (!seen.has(`[${m[1]}="N"]`)) seen.set(`[${m[1]}="N"]`, m[0]);
+  for (const m of css.matchAll(/\.((?:[\w-]*-)?hue)-\d+\b/g)) if (!seen.has(`.${m[1]}-N`)) seen.set(`.${m[1]}-N`, m[0]);
+  const unlisted = [...seen].filter(([, sel]) => !HUE_FAMILIES.some((f) => new RegExp(f.re.source).test(sel))).map(([fam]) => fam);
+  if (unlisted.length) note(`spine.css keys hue-numbered family(ies) HUE_FAMILIES does not name: ${unlisted.join(", ")} -- ` +
+    `their slot count is UNCHECKED (R112). Add a line to HUE_FAMILIES in this file`);
+}
+
 // S4.6 hue slots + hue-as-text (declared-only; undeclared tokens skip below): the
 // standard has ALWAYS said each declared --hue-N/--hue-N-ink pair is AA-gated, but no
 // pair was in the list until v1.8.2 -- the gate now matches the standard. --hue-N-text
 // (ruled in 2026-07-30) is checked as normal text on the three light grounds.
-for (let n = 1; n <= 5; n++) {
+for (let n = 1; n <= HUE_SLOTS; n++) {
   NORMAL_PAIRS.push([`--hue-${n}-ink`, `--hue-${n}`]);
   NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
 }
 let aaChecked = 0;
 let derivedPairs = NORMAL_PAIRS.length;
+// "fg|bg" of every pair ASSERTED, so the denominator can say how many are distinct: one pair is
+// asserted again under every label that reaches it (a crumb rule painting the tone's own ink).
+const assertedKeys = new Set();
 for (const [fg, bg, via] of NORMAL_PAIRS) {
   // The GROUND must be opaque: a translucent ground composites over whatever sits behind
   // the section, which this gate cannot see, so it is a NAMED skip rather than a guess.
@@ -717,6 +906,7 @@ for (const [fg, bg, via] of NORMAL_PAIRS) {
   const flat = !T[fg];
   if (flat) flattenedPairs++;
   aaChecked++;
+  assertedKeys.add(`${fg}|${bg}`);
   const ratio = cr(fgHex, bgHex);
   const label = `${fg} on ${bg}${flat ? ` (rgba flattened over the ground -> ${fgHex})` : ""}${via ? ` [${via}]` : ""}`;
   if (ratio < 4.5) bad(`${label} = ${ratio.toFixed(2)} (< 4.5 normal)`);
@@ -739,18 +929,99 @@ for (const f of sectionFiles) {
 for (const [fg, bg] of ACCENT_LARGE_PAIRS) {
   if (!T[fg] || !T[bg]) continue;
   aaChecked++;
+  assertedKeys.add(`${fg}|${bg}`);
   const ratio = cr(T[fg], T[bg]);
   const threshold = accentSmallText ? 4.5 : 3.0;
   if (ratio < threshold) bad(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (< ${threshold} ${accentSmallText ? "-- accent section carries small text" : "large"})`);
   else ok(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (>= ${threshold}${accentSmallText ? "" : " large-only"})`);
 }
 if (accentSmallText) note("an accent-tone section appears to carry small text -- accent checked at 4.5, not the large-only 3.0");
+// NON-TEXT CONTRAST, 3.0: THE FORM FIELD EDGE (R121, WCAG 1.4.11). A field's 2px edge is the only
+// thing that shows where the control is, so it owes 3.0 against the FIELD it bounds and against
+// the CARD the field sits in. The spine drew it in --line, the rule-and-divider token, and nothing
+// scored it: 1.27 against the field and 1.38 against the card on this seed's skin, on every form.
+//
+// EVERY OPERAND IS READ OUT OF spine.css, NONE IS NAMED HERE: the edge token from the
+// `.form-card input` rule's border, the field ground from the same rule's background, the card
+// ground from `.form-card`'s background, and every `[data-card-ground]` override of --card-bg as a
+// further card ground. Each var() chain resolves to the first token the skin declares, as the
+// cascade does. A translucent edge is FLATTENED over the field's own ground before it is scored
+// against either side, because that is the pixel the browser paints: the field's background runs
+// under its border. The FOCUSED edge (the `:focus` rule's border token) is scored against the same
+// grounds, below.
+let nonTextChecked = 0;
+{
+  const css = stripComments(read(P.spineCss) || "");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
+  const declOf = (body, prop) => (body.match(new RegExp("(?:^|[;\\s])" + prop + "\\s*:\\s*([^;]+)")) || [])[1] || null;
+  const fromVar = (v) => (v && v.includes("var(") ? v.slice(v.indexOf("var(")) : null);
+  // first opaque token the skin declares along a chain; a translucent GROUND is named, not guessed
+  const opaqueGround = (expr) => {
+    for (const m of (expr || "").matchAll(/(--[\w-]+)/g)) {
+      if (T[m[1]]) return m[1];
+      if (TA[m[1]]) { skippedTokens.add(`${m[1]} (translucent GROUND -- what sits behind it is not knowable here)`); return null; }
+    }
+    return null;
+  };
+  const field = rules.filter((r) => r.sels.includes(".form-card input") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
+  const card = rules.filter((r) => r.sels.includes(".form-card") && declOf(r.body, "background(?:-color)?")).pop();
+  const edgeExpr = field && fromVar(declOf(field.body, "border(?:-color)?"));
+  const fieldExpr = field && fromVar(declOf(field.body, "background(?:-color)?"));
+  const cardExpr = card && fromVar(declOf(card.body, "background(?:-color)?"));
+  if (!edgeExpr || !fieldExpr || !cardExpr) {
+    soft(`cannot score the form field edge: spine.css has no ${!edgeExpr ? "`.form-card input` border token" : !fieldExpr ? "`.form-card input` background" : "`.form-card` background"} to read (WCAG 1.4.11 owes the edge 3.0)`);
+  } else {
+    const edge = (() => { for (const m of edgeExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
+    const fieldG = opaqueGround(fieldExpr);
+    const cardGs = [opaqueGround(cardExpr)];
+    if (/--card-bg\b/.test(cardExpr)) {
+      for (const r of rules) {
+        if (!r.sels.some((s) => /\[data-card-ground=/.test(s))) continue;
+        const v = fromVar(declOf(r.body, "--card-bg"));
+        const g = v && opaqueGround(v);
+        if (g) cardGs.push(g);
+      }
+    }
+    if (!edge || !fieldG) {
+      soft(`cannot score the form field edge: ${!edge ? `no token along ${edgeExpr.trim()} is declared` : `the field ground ${fieldExpr.trim()} does not resolve to an opaque token`}`);
+    } else {
+      const fieldHex = T[fieldG];
+      const sides = [["the field", fieldG], ...[...new Set(cardGs.filter(Boolean))].map((g) => ["the card", g])];
+      const scoreEdge = (what, tok) => {
+        const edgeHex = resolveColour(tok, fieldHex);
+        const flat = !T[tok];
+        const lbl = `${what} ${tok}${flat ? ` (rgba flattened over the field ${fieldG} -> ${edgeHex})` : ""}`;
+        for (const [side, g] of sides) {
+          nonTextChecked++;
+          const ratio = cr(edgeHex, T[g]);
+          if (ratio < 3.0) bad(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (< 3.0 non-text, WCAG 1.4.11)`);
+          else ok(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (>= 3.0 non-text)`);
+        }
+      };
+      scoreEdge("form field edge", edge);
+      // THE FOCUSED EDGE, against the same grounds. The rest rule sets `outline: none`, so the
+      // `:focus` border colour is the ONLY thing that shows which field has focus, and a re-skin
+      // edits only tokens.css: a paler accent loses WCAG 1.4.11 and the visible focus indicator
+      // together. Read out of spine.css the same way, from the rule naming `.form-card input:focus`.
+      const focus = rules.filter((r) => r.sels.includes(".form-card input:focus") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
+      const focusExpr = focus && fromVar(declOf(focus.body, "border(?:-color)?"));
+      const focusTok = focusExpr && (() => { for (const m of focusExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
+      if (!focusTok) soft(`cannot score the form field focus edge: spine.css has ${!focusExpr ? "no `.form-card input:focus` border token" : `no declared token along ${focusExpr.trim()}`} to read (it is the field's only focus indicator, and WCAG 1.4.11 owes it 3.0)`);
+      else scoreEdge("form field focus edge", focusTok);
+    }
+  }
+}
 // THE DENOMINATOR, AND THE CHOICE, STATED IN THE SAME PLACE. A checker that reports a
 // verdict without its denominator has been silently narrowed before while it kept printing
 // OK, and the rgba class was outside the checked set for weeks with nothing saying so.
-note(`AA denominator: ${derivedPairs} pair(s) derived, ${aaChecked} asserted ` +
-     `(${flattenedPairs} of them with a translucent ink FLATTENED over its ground per the ` +
-     `mapping profile's Rule B), ${skippedTokens.size} token(s) unresolvable`);
+// AND THE ASSERTIONS ARE NOT THE PAIRS: a pair two labels reach is asserted twice and is one
+// ink on one ground, so the line says how many DISTINCT pairs the assertions cover. Without it a
+// list that re-asserts pairs already in the matrix reads as new coverage.
+note(`AA denominator: ${derivedPairs} pair(s) derived, ${aaChecked} asserted, covering ` +
+     `${assertedKeys.size} distinct ink/ground pair(s) (${aaChecked - assertedKeys.size} re-assert a pair ` +
+     `already asserted, under a further label; ${flattenedPairs} assertion(s) with a translucent ink ` +
+     `FLATTENED over its ground per the mapping profile's Rule B), ${skippedTokens.size} token(s) unresolvable; ` +
+     `${nonTextChecked} non-text pair(s) asserted at 3.0 (the form field edge, at rest and on focus)`);
 if (skippedTokens.size) note(`tokens the AA matrix could NOT resolve, by name: ${[...skippedTokens].join(", ")}`);
 if (!aaChecked) bad("no colour token pairs found to check (tokens.css missing or unparseable)");
 
@@ -786,7 +1057,7 @@ if (superHits.length) review(`superlative candidates -- ADVISORY, never blocks (
 else ok("no superlative candidates");
 
 // == 4. PER-ROUTE META + LANG + NOINDEX + TITLE UNIQUENESS ==
-out.push("\n[4] META / LANG / NOINDEX -- per-route head, unique titles, host-agnostic sitemap");
+out.push("\n[4] META / LANG / NOINDEX -- per-route head, unique titles, host-agnostic sitemap, the link-preview card");
 const rootSrc = read(P.root);
 if (!rootSrc) bad("src/routes/__root.tsx not found");
 else {
@@ -828,6 +1099,85 @@ if (smap) {
     if (smap.includes(host)) ok(`sitemap host matches site.config canonical host (${host})`);
     else bad(`sitemap host does not match site.config canonical host (${host}) -- no hardcoded host assumed`);
   } else note("site.config declares no canonical host; sitemap host left unchecked (not hardcoded)");
+}
+
+// THE LINK-PREVIEW CARD (R221), checked against its own bytes. site.config's `og` block is the fill
+// point the root head builds every og:image tag from, and its comment asks a human to keep type,
+// width and height true to the file. Nothing checked that, so deleting public/og-card.png left this
+// gate green while every shared link rendered a broken card, which is the row's own defect class.
+// So where `og.image` is declared, the file it names under public/ must exist, be under 300 KB, be
+// the 1200 x 630 landscape card the row sets (a near-square image renders as a small thumbnail),
+// and be what `og.type`, `og.width` and `og.height` say it is, read from its PNG or JPEG header. An
+// image on another host cannot be read from here and is named for review. No `og` block at all is
+// a note, because a site that has not taken the fill point has nothing here to be false to.
+//
+// AND og:locale AGREES WITH THE <html lang> __root hard-sets. They are two statements of one
+// language, so their language subtags must match, and their regions too where both carry one.
+{
+  const cfgSrc = stripComments(cfg || "");
+  const at = cfgSrc.match(/export\s+const\s+og\s*=\s*\{/);
+  const ogSrc = at ? braced(cfgSrc, at.index + at[0].length - 1) || "" : null;
+  const field = (k) => {
+    const m = ogSrc && ogSrc.match(new RegExp("\\b" + k + "\\s*:\\s*(?:[\"'`]([^\"'`]*)[\"'`]|(\\d+))"));
+    return m ? (m[1] ?? m[2]) : null;
+  };
+  // { type, w, h } from a PNG IHDR or a JPEG start-of-frame; null for any other format
+  const imageHeader = (buf) => {
+    if (buf.length >= 24 && buf.readUInt32BE(0) === 0x89504e47 && buf.toString("ascii", 12, 16) === "IHDR")
+      return { type: "image/png", w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+    for (let i = 2; i + 9 < buf.length;) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const mk = buf[i + 1];
+      if (mk === 0xff) { i++; continue; }
+      if (mk === 0x01 || (mk >= 0xd0 && mk <= 0xd8)) { i += 2; continue; }
+      if (mk >= 0xc0 && mk <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(mk))
+        return { type: "image/jpeg", w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) };
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+    return { type: "image/jpeg", w: null, h: null };
+  };
+  const img = field("image");
+  if (!img) note("site.config declares no og.image, so the link-preview card is not checked (R221)");
+  else {
+    const hostDecl = (cfgSrc.match(/canonicalHost\s*:\s*["'`]([^"'`]+)["'`]/) || [])[1] || null;
+    const hostOf = (u) => { try { return new URL(u).host; } catch { return null; } };
+    let path = null;
+    if (/^https?:\/\//i.test(img)) {
+      if (hostDecl && hostOf(img) === hostOf(hostDecl)) path = decodeURIComponent(new URL(img).pathname);
+      else review(`og.image ${img} is not on the site's own host${hostDecl ? ` (${hostDecl})` : ""}, so the gate cannot read ` +
+        `the card, and a card hosted elsewhere breaks when that host does (R221)`);
+    } else path = "/" + img.replace(/^\.?\//, "");
+    if (path) {
+      const file = join(ROOT, "public", path);
+      if (!existsSync(file) || !statSync(file).isFile()) {
+        bad(`og.image ${img} names public${path}, which does not exist: every shared link renders a broken card (R221)`);
+      } else {
+        const buf = readFileSync(file);
+        const kb = (buf.length / 1024).toFixed(0);
+        const head = imageHeader(buf);
+        const problems = [];
+        if (buf.length > 300 * 1024) problems.push(`it is ${kb} KB, over the 300 KB a messaging app will fetch`);
+        if (head && head.w) {
+          if (head.w !== 1200 || head.h !== 630) problems.push(`it is ${head.w} x ${head.h}, not the 1200 x 630 landscape card`);
+          const W = field("width"), H = field("height"), TY = field("type");
+          if (W !== String(head.w) || H !== String(head.h)) problems.push(`og.width x og.height read ${W ?? "unset"} x ${H ?? "unset"} and the file is ${head.w} x ${head.h}`);
+          if (TY !== head.type) problems.push(`og.type reads ${TY ?? "unset"} and the file is ${head.type}`);
+        } else review(`link-preview card public${path} is not a PNG or JPEG whose header this gate can read, so its dimensions and type are unchecked (R221)`);
+        if (problems.length) bad(`link-preview card public${path}: ${problems.join("; ")} (R221)`);
+        else if (head && head.w) ok(`link-preview card public${path} is ${head.w} x ${head.h} ${head.type}, ${kb} KB, and og.type, og.width and og.height are true to it (R221)`);
+      }
+    }
+  }
+  const loc = field("locale");
+  const langTag = rootSrc && (rootSrc.match(/<html\s+lang=["']([a-zA-Z-]+)["']/) || [])[1];
+  if (loc && langTag) {
+    const [lLang, lReg] = langTag.toLowerCase().split("-");
+    const [oLang, oReg] = loc.toLowerCase().split(/[_-]/);
+    if (lLang !== oLang || (lReg && oReg && lReg !== oReg))
+      bad(`og.locale ${loc} and <html lang="${langTag}"> in __root state different languages; they are one fact and must agree`);
+    else ok(`og.locale ${loc} agrees with <html lang="${langTag}"> in __root`);
+  }
 }
 
 // == 5. CHARTER <-> REPO (bidirectional -- auditor hardening) ==
@@ -1177,6 +1527,122 @@ out.push("\n[9] S8 PER-LANE RECORD -- every intake lane has a record; the record
     note("THIS CHECK CANNOT PROVE A LANE WAS RUN. It reads a record the builder wrote and asserts");
     note("only that every lane has one with both halves; a lane never run whose line was written");
     note("anyway passes here. The standard states the same limit rather than engineering around it.");
+  }
+}
+
+// == 10. PHONE MENU -- a nav item's children are reachable in the open phone menu (R125) ==
+// A `.submenu` is a hover/focus-within dropdown whose parent is itself a link. On a touch screen
+// the tap that fades the dropdown in is also the click on the parent's link, so the page leaves as
+// the children appear, and every site whose nav has `children` carries it (the operator, on a
+// phone, 2026-09-29). The fix lives in spine.css's phone block: the media block that hides the
+// desktop `.nav` and draws `.nav-open`, found by what it does rather than by its breakpoint. The
+// submenu there must be STATIC, SHOWN (visibility and opacity), UNTRANSFORMED (the dropdown's
+// translateX(-50%) would push a static list half off the column) and INDENTED under its parent. A
+// spine.css without that is the spine at aismith-site-seed b8074088.
+//
+// AND WHAT IS READ IS THE CASCADE, NOT ONE BLOCK. Every rule in the FILE whose selector ends at a
+// `.submenu` under `.nav-open` is read, at the top level or in any @media or @supports block that
+// can apply while the phone menu is drawn (one whose min-width is above the phone block's
+// max-width cannot), and each property is resolved as the cascade resolves it: !important, then
+// specificity, then source order. Reading the phone block alone let a second block, later in the
+// file at the same specificity, hide the children again while this line still passed. And the
+// box must be DISPLAYED and have HEIGHT: `display: none`, a zero `height` or `max-height`, or a
+// clipping `overflow` on a height-bounded list hides the children as surely as `visibility`.
+out.push("\n[10] PHONE MENU -- a nav item's children are reachable in the open phone menu");
+{
+  const css = stripComments(read(P.spineCss) || "");
+  const medias = [];
+  for (const m of css.matchAll(/@media\s*([^{]+)\{/g)) {
+    let depth = 1, i = m.index + m[0].length;
+    for (; i < css.length && depth; i++) { if (css[i] === "{") depth++; else if (css[i] === "}") depth--; }
+    medias.push({ query: m[1].trim(), body: css.slice(m.index + m[0].length, i - 1), at: m.index });
+  }
+  const phone = medias.find((b) => /(?:^|[\s}])\.nav\s*\{[^}]*display\s*:\s*none/.test(b.body) && /\.nav-open\b/.test(b.body));
+  if (!phone) {
+    soft("spine.css has no media block that hides the desktop .nav and draws .nav-open, so the open phone menu " +
+         "could not be read and a nav item's children are not shown to be reachable on a touch screen");
+  } else {
+    // every style rule in source order, with the conditional block it sits in (null = top level)
+    // and that block's offset in the file, which is how the phone block is told from a second
+    // block carrying the same query
+    const all = [];
+    (function scan(base, end, media, at) {
+      let i = base;
+      while (i < end) {
+        const open = css.indexOf("{", i);
+        if (open < 0 || open >= end) break;
+        let depth = 1, j = open + 1;
+        for (; j < end && depth; j++) { if (css[j] === "{") depth++; else if (css[j] === "}") depth--; }
+        const raw = css.slice(i, open), prelude = raw.trim();
+        if (/^@(media|supports)\b/.test(prelude)) scan(open + 1, j - 1, prelude.replace(/^@\w+\s*/, ""), i + raw.length - raw.trimStart().length);
+        else if (!prelude.startsWith("@")) all.push({ sels: prelude.split(",").map((x) => x.trim()), body: css.slice(open + 1, j - 1), media, at });
+        i = j;
+      }
+    })(0, css.length, null, null);
+    const phoneMax = parseFloat((phone.query.match(/max-width\s*:\s*([\d.]+)px/) || [])[1]);
+    const applies = (q) => {
+      if (q === null) return true;
+      if (/^\s*print\b/.test(q)) return false;
+      const min = parseFloat((q.match(/min-width\s*:\s*([\d.]+)px/) || [])[1]);
+      return !(min > phoneMax);
+    };
+    // [ids, classes + attributes + pseudo-classes, elements + pseudo-elements]
+    const specificity = (sel) => {
+      const s = sel.replace(/::[\w-]+/g, () => " E ");
+      return [(s.match(/#[\w-]+/g) || []).length,
+              (s.match(/\.[\w-]+|\[[^\]]*\]|:[\w-]+/g) || []).length,
+              (s.match(/(?:^|[\s>+~])(?:[a-zA-Z][\w-]*|E)(?![\w-])/g) || []).length];
+    };
+    const bySpec = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    const outranks = (a, b) => (a.imp !== b.imp ? a.imp : (bySpec(a.spec, b.spec) || a.order - b.order) > 0);
+    const won = {};   // property -> { value, imp, spec, order }
+    let read10 = 0, outside = 0;
+    all.forEach((r, order) => {
+      if (!applies(r.media)) return;
+      const hits = r.sels.filter((x) => /\.nav-open\b/.test(x) && /\.submenu$/.test(x));
+      if (!hits.length) return;
+      read10++;
+      if (r.at !== phone.at) outside++;
+      const spec = hits.map(specificity).sort((a, b) => bySpec(b, a))[0];
+      for (const d of r.body.split(";")) {
+        const k = d.indexOf(":");
+        if (k <= 0) continue;
+        const prop = d.slice(0, k).trim().toLowerCase();
+        let value = d.slice(k + 1).trim().toLowerCase();
+        const imp = /!\s*important$/.test(value);
+        value = value.replace(/\s*!\s*important$/, "");
+        const cand = { value, imp, spec, order };
+        if (!won[prop] || outranks(cand, won[prop])) won[prop] = cand;
+      }
+    });
+    const decl = Object.fromEntries(Object.entries(won).map(([p, w]) => [p, w.value]));
+    const missing = [];
+    if (decl.position !== "static") missing.push("position: static (a floating dropdown cannot open on a tap that is also a click)");
+    if (decl.visibility !== "visible") missing.push("visibility: visible (shown without hover or focus)");
+    if (decl.opacity === undefined || parseFloat(decl.opacity) !== 1) missing.push("opacity: 1");
+    if (decl.transform !== "none") missing.push("transform: none (the dropdown's translateX(-50%) pushes a static list half off the column)");
+    // the LEFT edge of a padding or margin shorthand, or the longhand, as the cascade reads it
+    const leftOf = (prop) => {
+      const long = decl[`${prop}-left`];
+      if (long !== undefined) return long;
+      const v = decl[prop];
+      if (v === undefined) return null;
+      const p = v.split(/\s+/);
+      return p.length === 1 ? p[0] : p.length < 4 ? p[1] : p[3];
+    };
+    const indented = ["padding", "margin"].some((prop) => parseFloat(leftOf(prop) || "0") > 0);
+    if (!indented) missing.push("an indent under its parent (a non-zero padding-left or margin-left)");
+    if (decl.display === "none") missing.push("a display other than none (display: none hides every child)");
+    const zero = (v) => v !== undefined && parseFloat(v) === 0;
+    const bounded = (v) => v !== undefined && !/^(auto|none)$/.test(v);
+    if (zero(decl.height) || zero(decl["max-height"])) missing.push("a height (a zero height or max-height collapses the list)");
+    else if ((bounded(decl.height) || bounded(decl["max-height"])) && [decl.overflow, decl["overflow-y"]].some((v) => /^(hidden|clip)\b/.test(v || "")))
+      missing.push("an overflow that does not clip it (overflow hidden or clip on a height-bounded list cuts children off)");
+    const where = `${read10} rule(s) across the file${outside ? `, ${outside} of them outside the phone block` : ""}`;
+    if (missing.length) bad(`open phone menu (@media ${phone.query}): .nav-open .submenu ${read10 ? `is read from ${where} and still lacks` : "has no rule, so it lacks"} ` +
+      `${missing.join("; ")}. A nav item's children are unreachable on a touch screen (R125)`);
+    else ok(`open phone menu (@media ${phone.query}): every .submenu is static, shown, untransformed and indented ` +
+      `under its parent, displayed and not collapsed or clipped (read from ${where})`);
   }
 }
 
