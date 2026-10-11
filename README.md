@@ -151,3 +151,47 @@ handled through the `[data-hue]` cascade) and `data-hue-bar` (`<TierCard hue>`, 
 line**, naming the component that renders the attribute and the `spine.css` anchor that grounds it.
 A `data-hue*` attribute the spine layer ships that no entry names is reported as UNSCORED rather
 than silently skipped, so the list decaying is a finding.
+
+Each entry also says whether the attribute's own block may ground what carries it (`grounds`).
+`data-hue` does. `data-hue-bar` and `data-hue-tint` (R120, the declared way to borrow a hue as a
+band or tint) are `grounds: false`: their blocks set one indirection property and nothing else, and
+`[2]` FAILS such a block that sets `background`, `color` or any `--sec-*`. A slot a carrier composes
+is read from a component's `hue` prop or from the attribute written on an element directly.
+
+### What `[2]` and `[10]` gained on 2026-10-11 (brief W13)
+
+Each one has a planted negative and a green control in `verify.selftest.mjs` (C7 to C11).
+
+- **Form field edge, 3.0 (R121, WCAG 1.4.11).** The `.form-card input` border token, flattened over
+  the field's own background, is scored against the field and against the card (`.form-card`'s
+  background and every `[data-card-ground]` override). Every operand is read out of `spine.css`.
+- **Crumb inks, 4.5 (R122).** `SECTION_INK_RULES` lists the rules that paint text directly on the
+  section ground (`.crumb`, `.crumb a`, `.crumb a:hover`). Each `color` is resolved as the cascade
+  resolves it on every non-accent tone ground and every composed hue cell. Extend it by a line.
+- **Six hue slots (R112).** `HUE_SLOTS` is 6, and every family in `HUE_FAMILIES` (`[data-hue]`,
+  `.em-hue-N`, `data-hue-bar`, `data-hue-tint`) must carry all six.
+- **`[10]` PHONE MENU (R125).** The media block that hides the desktop `.nav` and draws `.nav-open`
+  must render each `.submenu` static, shown, untransformed and indented under its parent.
+
+## Release history
+
+Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W13: the spine defects and the hue slots)
+
+The Factory re-embeds this release at site-contract 1.8.31 (plan job K1), and each site takes it
+at its resync, in that order.
+
+- **R121** `.form-card` fields draw their edge in `--line-input` (falling back to `--text-soft`):
+  3.72 against the field and 4.05 against the card on this skin, was 1.27 and 1.38 in `--line`.
+- **R122** `.crumb a:hover` reads the crumb's own accent chain, `--accent-text` on the light tones
+  (5.42 on `--bg`), where it painted `--accent` (3.81).
+- **R123** The gallery lightbox takes `closeLabel`, `prevLabel` and `nextLabel` props, steps through
+  the open category's photos by buttons and the arrow keys, and keeps focus inside the dialog.
+- **R125** In the open phone menu each `.submenu` is static, shown and indented under its parent.
+- **R112** Six hue slots in every hue-keyed family, and `hue` props typed 1 to 6.
+- **R120** `data-hue-tint="N"` borrows a hue as a band or tint without grounding or setting inks.
+- **R197** `ContactForm`'s honeypot defaults to `honeypot`, the key the `contact` function drops.
+- **R221** (seed limb) The root head carries an absolute `og:image` with its type, width, height and
+  alt, plus `og:locale` and `twitter:card`, filled from `og` in `site.config`; a placeholder
+  `public/og-card.png` says on its face that it is one.

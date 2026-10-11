@@ -7,6 +7,9 @@ export const site = {
   name: "AI Smith",
   // S2.4: fonts loaded in __root.tsx <head>; values set in tokens.css
   contactEmail: "contact@aismith.io",
+  // The production host. public/sitemap.xml and robots.txt name it, verify.mjs [4] checks the
+  // sitemap against it, and the root head builds its absolute og: URLs on it (`og` below).
+  canonicalHost: "https://aismith.io",
 
   // S6: contactAction = the SHARED AISmith-functions /contact URL when a form replaces mailto;
   // newsletterAction = this site's OWN functions-only project URL if a newsletter is mounted.
@@ -27,6 +30,24 @@ export const site = {
 
 // Demo = true (public but not crawlable; shareable for feedback). Production = false.
 export const seo = { noindex: true };
+
+// THE LINK-PREVIEW FILL POINT (R221, the site-seed limb). The root head builds every og:image
+// and twitter: tag from this block and `site.canonicalHost`, so a fork fills it here and
+// nowhere else. og:image is ABSOLUTE on the site's own host, because WhatsApp, Slack and
+// LinkedIn do not resolve a relative path: a relative og:image reads as configured and renders
+// as nothing. The card is a 1200 x 630 LANDSCAPE image under 300 KB in /public, because
+// WhatsApp shows a near-square image as a small thumbnail and can drop a large one.
+// public/og-card.png ships as a PLACEHOLDER that says so on its face, so an unfilled fork
+// shares a visibly unfilled card rather than a silent text-only one. Replace the file, then
+// the alt text; keep type, width and height true to the file.
+export const og = {
+  image: "/og-card.png",
+  type: "image/png",
+  width: 1200,
+  height: 630,
+  alt: "Placeholder link-preview card: replace public/og-card.png before launch",
+  locale: "en_GB",   // language_TERRITORY; the fleet's Dutch-language sites use nl_BE
+};
 
 export const nav: NavItem[] = [
   { label: "What we make", href: "/" },

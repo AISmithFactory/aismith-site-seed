@@ -13,6 +13,12 @@
 // commissioned by the brief that wrote this file. An unstated scope is how every miscount in this
 // repo has happened, so the count is printed at the end.
 //
+// EXTENDED 2026-10-11 (brief W13) by the checks THAT run added, each with a planted negative that
+// goes red and a green control: C7 the form field edge at 3.0 (R121), C8 the crumb inks on every
+// crumb ground (R122), C9 six hue slots in every hue-keyed family (R112), C10 the non-grounding hue
+// carriers and the raw data-hue-tint attribute (R120), C11 the [10] open phone menu (R125). The
+// sections that predate both runs are still NOT covered.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -88,6 +94,28 @@ const SPINE_CSS = `[data-tone="paper"] { --sec-bg: var(--bg); --sec-text: var(--
 .tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }
 .tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); }
 .tier-card .tier-ico { width: 46px; height: 46px; background: var(--tier-bar, var(--accent)); color: var(--on-dark); }
+` +
+// The six-slot families [2] requires (R112), generated one line per slot so a case can drop a slot
+// by line: the remaining [data-hue] and data-hue-bar slots, then .em-hue-N and data-hue-tint 1-6.
+[2, 4, 5, 6].map((n) =>
+  `[data-hue="${n}"] { --sec-bg: var(--hue-${n}, var(--tone-bg)); --sec-text: var(--hue-${n}-ink, var(--tone-text)); --sec-soft: var(--hue-${n}-soft, var(--hue-${n}-ink, var(--tone-soft))); }\n` +
+  `.tier-card[data-hue-bar="${n}"] { --tier-bar: var(--hue-${n}, var(--accent)); }\n`).join("") +
+[1, 2, 3, 4, 5, 6].map((n) =>
+  `.em-hue-${n} { color: var(--hue-${n}-text, currentColor); }\n` +
+  `[data-hue-tint="${n}"] { --hue-tint: var(--hue-${n}, var(--accent)); }\n`).join("") +
+// The field edge (R121), the crumb rules (R122) and the open phone menu (R125), in the shipped
+// spine's shape. The tokens declare no --line-input, so the edge falls back to --text-soft.
+`.form-card { background: var(--card-bg, var(--surface)); }
+.form-card input, .form-card textarea, .form-card select { background: var(--bg); border: 2px solid var(--line-input, var(--text-soft)); }
+.crumb { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
+.crumb a { color: var(--sec-soft, var(--tone-soft, var(--text-soft))); }
+.crumb a:hover { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
+.submenu { position: absolute; opacity: 0; visibility: hidden; transform: translateX(-50%); }
+@media (max-width: 900px) {
+  .nav { display: none; }
+  .header.nav-open .nav { display: flex; }
+  .header.nav-open .nav .submenu { position: static; opacity: 1; visibility: visible; transform: none; padding: 0 0 0 18px; }
+}
 `;
 const SPINE_TSX = `export function Section({ tone = "paper", hue, children }) {
   return <section data-tone={tone} data-hue={hue}>{children}</section>;
@@ -141,7 +169,7 @@ function build(name, mut = {}) {
   // The spine layer is byte-identical in both trees, so [1b] is quiet and every finding below is
   // about the mutation rather than about the spine.
   for (const base of [site, seed]) {
-    put(base, "src/styles/spine.css", SPINE_CSS);
+    put(base, "src/styles/spine.css", mut.spineCss ?? SPINE_CSS);
     put(base, "src/components/spine/index.tsx", SPINE_TSX);
   }
   put(site, "src/styles/tokens.css", mut.tokens ?? TOKENS);
@@ -188,7 +216,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -410,10 +438,164 @@ export const Page = () => <Section tone="paper"><TierCard hue={2}>plan</TierCard
     notes(run(fx, { args: ["--ci"] }), "NOT ARMED"), lineOf(run(fx, { args: ["--ci"] }), "NOT ARMED"));
 }
 
+// ---- C7. R121: the form field edge owes 3.0 against the field AND the card ----------------------
+const EDGE_OK = "var(--line-input, var(--text-soft))";
+{
+  // CONTROL: the shipped rule on a skin with no --line-input, so the chain falls back to --text-soft
+  const out = run(build("field-edge-control", {}));
+  expect("[2] scores the field edge against the field and passes it",
+    passes(out, "form field edge --text-soft vs the field --bg"), lineOf(out, "form field edge"));
+  expect("and against the card", passes(out, "form field edge --text-soft vs the card --surface"), lineOf(out, "vs the card"));
+  expect("and the denominator counts the non-text pairs", lineOf(out, "AA denominator").includes("2 non-text pair(s) asserted at 3.0"), lineOf(out, "AA denominator"));
+}
+{
+  // PLANT: the edge drawn in the rule-and-divider token, as at b8074088 (1.27 and 1.38 on the seed's skin)
+  const fx = build("field-edge-line", {
+    spineCss: SPINE_CSS.replace(EDGE_OK, "var(--line)"),
+    tokens: TOKENS.replace("}", "  --line: rgba(17, 17, 17, .12);\n}"),
+  });
+  const out = run(fx);
+  expect("[2] FAILS a field edge drawn in --line against the field, flattened over it",
+    failsAny(out, "form field edge --line (rgba flattened over the field --bg") && failsAny(out, "vs the field --bg"), verdicts(out, "FAIL").join(" | "));
+  expect("and against the card", failsAny(out, "vs the card --surface"), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // a DECLARED --line-input is the token scored, and a [data-card-ground] override is a further card ground
+  const fx = build("field-edge-declared", {
+    spineCss: SPINE_CSS + `[data-card-ground="alt"] { --card-bg: var(--bg-alt); }\n`,
+    tokens: TOKENS.replace("}", "  --line-input: rgba(17, 17, 17, .55);\n}"),
+  });
+  const out = run(fx);
+  expect("[2] scores the declared --line-input, not the fallback",
+    passes(out, "form field edge --line-input (rgba flattened") && !out.includes("form field edge --text-soft"), lineOf(out, "form field edge"));
+  expect("and scores the card-ground override as a card", passes(out, "vs the card --bg-alt"), lineOf(out, "vs the card --bg-alt"));
+}
+{
+  // no rule to read is UNVERIFIED, never passed: a warning locally and a failure under --ci
+  const fx = build("field-edge-absent", { spineCss: SPINE_CSS.split("\n").filter((l) => !l.startsWith(".form-card")).join("\n") });
+  expect("[2] warns when there is no field rule to score", warns(run(fx), "cannot score the form field edge"), lineOf(run(fx), "cannot score"));
+  expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "cannot score the form field edge"), lineOf(run(fx, { args: ["--ci"] }), "cannot score"));
+}
+
+// ---- C8. R122: every crumb rule is scored on every ground a crumb sits on ----------------------
+{
+  // CONTROL: the shipped chain, which resolves to the tone's own accent on each tone ground
+  const out = run(build("crumb-control", {}));
+  expect("[2] scores .crumb and its hover on a light tone", passes(out, "[crumb ink .crumb + .crumb a:hover, tone=paper]"), lineOf(out, "tone=paper]"));
+  expect("and on a dark tone", passes(out, "[crumb ink .crumb + .crumb a:hover, tone=dark]"), lineOf(out, "tone=dark]"));
+  expect("and the link at rest", passes(out, "[crumb ink .crumb a, tone=paper]"), lineOf(out, "crumb ink .crumb a, tone=paper"));
+  expect("and the accent tone is held out (large display only)", !out.includes("crumb ink .crumb + .crumb a:hover, tone=accent"));
+}
+{
+  // PLANT: the hover painted in the FILL token, as at b8074088. --accent #c0632e on #ffffff is 4.15
+  const fx = build("crumb-hover-accent", {
+    spineCss: SPINE_CSS.replace(".crumb a:hover { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }", ".crumb a:hover { color: var(--accent); }"),
+    tokens: TOKENS.replace("--accent: #b34700;", "--accent: #c0632e;"),
+  });
+  const out = run(fx);
+  expect("[2] FAILS a crumb hover painted in --accent and names the rule",
+    failsAny(out, "--accent on --bg [crumb ink .crumb a:hover, tone=paper]"), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // on a composed hue cell the crumb inks resolve through the HUE block, as the cascade does
+  const out = run(build("crumb-hue-cell", {
+    indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
+export const Page = () => <Section tone="paper" hue={1}>body</Section>;
+`,
+  }));
+  expect("[2] scores the crumb link on the hue ground in the hue's own ink",
+    passes(out, "--hue-1-ink on --hue-1 [crumb ink .crumb a, tone=paper, hue 1 ground]"), lineOf(out, "hue 1 ground"));
+}
+{
+  // a listed rule missing from spine.css is UNSCORED and says so
+  const fx = build("crumb-absent", { spineCss: SPINE_CSS.split("\n").filter((l) => !l.startsWith(".crumb a:hover")).join("\n") });
+  expect("[2] warns that a listed crumb rule is missing", warns(run(fx), "crumb ink rule(s) not found in spine.css") && lineOf(run(fx), "crumb ink rule(s) not found").includes(".crumb a:hover"), lineOf(run(fx), "not found"));
+}
+
+// ---- C9. R112: six hue slots in every hue-keyed family ------------------------------------------
+{
+  const out = run(build("hue-slots-control", {}));
+  expect("[2] passes a spine carrying all six slots in all four families", passes(out, "carries all 6 S4.6 hue slots in each of 4 hue-keyed families"), lineOf(out, "S4.6 hue slots"));
+}
+{
+  // PLANT: the five-slot spine of b8074088, every family stopping at five
+  const fx = build("hue-slots-five", { spineCss: SPINE_CSS.split("\n").filter((l) => !/hue-6\b|="6"/.test(l)).join("\n") });
+  const out = run(fx);
+  const l = lineOf(out, "does not carry all 6 S4.6 hue slots");
+  expect("[2] FAILS a spine that stops at five", fails(out, "does not carry all 6 S4.6 hue slots"), l);
+  expect("and names every family that lacks slot 6",
+    ['[data-hue="N"]', ".em-hue-N", '[data-hue-bar="N"]', '[data-hue-tint="N"]'].every((f) => l.includes(`${f} (`)) && l.includes("lacks slot(s) 6"), l);
+}
+
+// ---- C10. R120: a non-grounding carrier sets no ground and no ink --------------------------------
+{
+  const out = run(build("tint-control", {}));
+  expect("[2] passes non-grounding carriers that set only their property",
+    passes(out, "non-grounding hue carrier(s) data-hue-bar, data-hue-tint set no ground and no ink"), lineOf(out, "non-grounding"));
+}
+{
+  // PLANT: a tint block that grounds, which is the [data-hue] behaviour the attribute exists to avoid
+  const fx = build("tint-grounds", { spineCss: SPINE_CSS.replace('[data-hue-tint="3"] { --hue-tint: var(--hue-3, var(--accent)); }',
+    '[data-hue-tint="3"] { --hue-tint: var(--hue-3, var(--accent)); background: var(--hue-tint); color: var(--hue-3-ink); --sec-text: var(--hue-3-ink); }') });
+  const out = run(fx);
+  const l = lineOf(out, "non-grounding hue carrier block(s) set a ground or an ink");
+  expect("[2] FAILS a data-hue-tint block that grounds", fails(out, "non-grounding hue carrier block(s) set a ground or an ink"), l);
+  expect("and names the block and what it sets", l.includes('[data-hue-tint="3"] sets background, color, --sec-text'), l);
+}
+{
+  // the tier-card precedent is held to the same rule
+  const fx = build("bar-grounds", { spineCss: SPINE_CSS.replace('.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }',
+    '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); background: var(--hue-1); }') });
+  const out = run(fx);
+  expect("[2] FAILS a data-hue-bar block that grounds", lineOf(out, "set a ground or an ink").includes('.tier-card[data-hue-bar="1"] sets background') && fails(out, "set a ground or an ink"), lineOf(out, "set a ground"));
+}
+{
+  // the RAW attribute in markup composes its slot: a spine selector grounding on --hue-tint with an ink is scored
+  const fx = build("tint-raw-attr", {
+    spineCss: SPINE_CSS + ".tint-chip { background: var(--hue-tint); color: var(--on-dark); }\n",
+    indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
+export const Page = () => <Section tone="paper"><div data-hue-tint={3}><span className="tint-chip">x</span></div></Section>;
+`,
+  });
+  const out = run(fx);
+  expect("[2] scores an ink on a --hue-tint ground composed by the raw attribute",
+    failsAny(out, "--on-dark on --hue-3") && lineOf(out, "hue carriers beyond").includes("data-hue-tint=3"), lineOf(out, "hue carriers beyond"));
+}
+
+// ---- C11. R125: [10] the open phone menu shows a nav item's children ----------------------------
+const PHONE_RULE = "  .header.nav-open .nav .submenu { position: static; opacity: 1; visibility: visible; transform: none; padding: 0 0 0 18px; }\n";
+{
+  const out = run(build("phone-menu-control", {}));
+  expect("[10] passes a phone block that shows every submenu", passes(out, "open phone menu (@media (max-width: 900px)): every .submenu is static, shown, untransformed and indented"), lineOf(out, "open phone menu (@media"));
+}
+{
+  // PLANT: the phone block of b8074088, which never re-flows a .submenu
+  const out = run(build("phone-menu-none", { spineCss: SPINE_CSS.replace(PHONE_RULE, "") }));
+  expect("[10] FAILS a phone block with no submenu rule", fails(out, "open phone menu (@media") && lineOf(out, "open phone menu (@media").includes("has no rule"), lineOf(out, "open phone menu (@media"));
+}
+{
+  // a PARTIAL fix: static and shown, still carrying the dropdown's translateX(-50%)
+  const out = run(build("phone-menu-transform", { spineCss: SPINE_CSS.replace(PHONE_RULE, PHONE_RULE.replace("transform: none; ", "")) }));
+  const l = lineOf(out, "open phone menu (@media");
+  expect("[10] FAILS a submenu left transformed and names only that", fails(out, "open phone menu (@media") && l.includes("transform: none") && !l.includes("position: static"), l);
+}
+{
+  // shown but not indented under its parent
+  const out = run(build("phone-menu-flush", { spineCss: SPINE_CSS.replace(PHONE_RULE, PHONE_RULE.replace("padding: 0 0 0 18px;", "padding: 0;")) }));
+  expect("[10] FAILS a submenu that is not indented", fails(out, "open phone menu (@media") && lineOf(out, "open phone menu (@media").includes("an indent under its parent"), lineOf(out, "open phone menu (@media"));
+}
+{
+  // no phone block to read is UNVERIFIED: a warning locally and a failure under --ci
+  const fx = build("phone-menu-noblock", { spineCss: SPINE_CSS.slice(0, SPINE_CSS.indexOf("@media")) });
+  expect("[10] warns when no phone block can be read", warns(run(fx), "no media block that hides the desktop .nav"), lineOf(run(fx), "no media block"));
+  expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no media block that hides the desktop .nav"), lineOf(run(fx, { args: ["--ci"] }), "no media block"));
+}
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
-console.log("fill-in branches attacker-2 measured as uncovered, and one control. The sections that");
-console.log("predate them are NOT covered.");
+console.log("fill-in branches attacker-2 measured as uncovered, one control, and the checks added");
+console.log("2026-10-11 (C7 field edge R121, C8 crumb inks R122, C9 six hue slots R112, C10 non-grounding");
+console.log("carriers R120, C11 [10] phone menu R125). The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

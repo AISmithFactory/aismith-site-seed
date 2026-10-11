@@ -7,7 +7,7 @@ import {
   createRootRoute, Outlet, useRouterState, HeadContent, Scripts,
 } from "@tanstack/react-router";
 import { SiteHeader, SiteFooter, SkipLink } from "../components/spine";
-import { nav, footerColumns, socials, legal, site, seo } from "../content/site.config";
+import { nav, footerColumns, socials, legal, site, seo, og } from "../content/site.config";
 import "../styles/tokens.css";
 import "../styles/spine.css";
 
@@ -60,11 +60,18 @@ export const Route = createRootRoute({
       { property: "og:title", content: "AI Smith" },
       { property: "og:description", content: "Made to fit. Yours to keep." },
       { property: "og:type", content: "website" },
+      // Link-preview card (R221): filled from `og` in src/content/site.config, ABSOLUTE on
+      // site.canonicalHost because a relative og:image is not resolved by the apps that matter.
+      { property: "og:image", content: new URL(og.image, site.canonicalHost).href },
+      { property: "og:image:type", content: og.type },
+      { property: "og:image:width", content: String(og.width) },
+      { property: "og:image:height", content: String(og.height) },
+      { property: "og:image:alt", content: og.alt },
+      { property: "og:locale", content: og.locale },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       // Demo↔production privacy switch (S7): noindex when seo.noindex is true (src/content/site.config).
       ...(seo.noindex ? [{ name: "robots", content: "noindex,nofollow" }] : []),
-      // NOTE: no og:image asset ships in the concept seed (declared in the charter);
-      // add a 1200x630 card to /public and an og:image meta before launch.
     ],
     links: [
       // S2.4 — fonts loaded by the app (swap for @fontsource self-hosting in production).

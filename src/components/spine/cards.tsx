@@ -33,7 +33,7 @@ export function MediaCard(
 export function TierCard(
   { label, price, per, items, cta, hue, icon }:
   { label: string; price: string; per?: string; items: string[]; cta?: React.ReactNode;
-    hue?: 1 | 2 | 3 | 4 | 5; icon?: React.ReactNode }
+    hue?: 1 | 2 | 3 | 4 | 5 | 6; icon?: React.ReactNode }
 ) {
   return (
     <div className="tier-card" data-hue-bar={hue}>
