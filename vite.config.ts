@@ -9,7 +9,18 @@ import viteReact from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [
     tanstackStart({
-      prerender: { enabled: true, crawlLinks: true, failOnError: true },
+      prerender: {
+        enabled: true,
+        crawlLinks: true,
+        failOnError: true,
+        // The crawl fetches every local <a href> it finds and writes the response as TEXT to that
+        // path, so a linked public/ file (/menu.pdf) is written over its own copy in dist/ as
+        // corrupt text, and a link carrying a query or a fragment (/contact?aan=x) is fetched as a
+        // page of its own and written over the page it names. Crawl plain page paths only.
+        // agents/site/verify.mjs [11] fails a build whose published copy of a linked public/
+        // file differs from the source (R109).
+        filter: (page) => !/[?#]/.test(page.path) && !/\.[a-z0-9]{2,5}$/i.test(page.path),
+      },
       pages: [
         { path: "/" },
         { path: "/restaurants" },

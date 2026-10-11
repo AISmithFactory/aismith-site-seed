@@ -27,6 +27,20 @@
 // and overflow it never asserted (F4); C12 the link-preview card against its own bytes (F6) and
 // og:locale against <html lang> (F9), both in [4].
 //
+// EXTENDED 2026-10-11 (brief W14) by the checks THAT run added, each with a planted negative and a
+// green control: C13 each [data-skin] block scored as its own map and every declared --hue-N whatever
+// N (R110), C14 [5] route paths by TanStack Router's file convention (R111), C15 hue grounds composed
+// through a component prop or an inline style (R063), C16 [11] a linked public/ file against the
+// published build (R109). Run against the verify.mjs of main before that run, 33 of these 35
+// assertions FAIL; the two that hold there are marked REGRESSION GUARD.
+//
+// FOLDED the same day from the code review of PR #25, each finding with its own plant and control:
+// C13 a hue pair derived only where the map declares its ink and its ground (F1), and the base
+// pass's slot note naming the map rather than a skin (F4); C15 the R063 line stating its markup
+// scope and counting var(--hue-N) outside it by file (F5); C16 a linked file with no copy at the
+// same path named and not failed, beside a rewrite that still fails (F2). Run against #25's head
+// before the fold, 7 of these 9 assertions FAIL; the two that hold there are marked REGRESSION GUARD.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -69,7 +83,7 @@ const SHA40 = "0".repeat(40);
 // A minimal site that is quiet on the checks this harness scores. Every negative case below is
 // this tree plus exactly one stated mutation.
 //
-// --on-dark (#ffffff) on --hue-3 (#8a8a8a) is 3.55, which is BELOW 4.5: that is the cell the
+// --on-dark (#ffffff) on --hue-3 (#8a8a8a) is 3.45, which is BELOW 4.5: that is the cell the
 // hue-carrier case needs, and it is the cell the tone-keyed and [data-hue] paths cannot reach.
 const TOKENS = `:root {
   --bg: #ffffff;
@@ -226,7 +240,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, and the review fold of #24)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -288,7 +302,7 @@ console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (
 // ---- C3. row 046, GROUND half: a hue carrier that is not <Section hue> ------------------------
 {
   // The mutation is ONE TierCard gaining hue={3}. `data-hue-bar` grounds `.tier-card .tier-ico`
-  // in --hue-3 and that selector hardcodes `color: var(--on-dark)` = 3.55, a real ink on a real
+  // in --hue-3 and that selector hardcodes `color: var(--on-dark)` = 3.45, a real ink on a real
   // ground that no [data-hue] block and no [data-tone] selector appears in.
   const fx = build("carrier-tiercard", {
     indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
@@ -770,13 +784,256 @@ const OG = ({ image = "/og-card.png", type = "image/png", locale = "en_GB" } = {
   expect("[4] FAILS og.locale nl_BE against <html lang=\"en\">", fails(out, "og.locale nl_BE and <html lang=\"en\">"), lineOf(out, "og.locale"));
 }
 
+// ---- C13. R110: each [data-skin] block is its own map over the base :root; every declared slot ----
+// A skin's --text-soft #9a9a9a is 2.81 on --bg (#ffffff); the base's #595959 is 7.00 there.
+const SKIN = (body) => `[data-skin="nacht"]:root {\n${body}\n}\n`;
+{
+  // PLANT: the skin ABOVE :root, sz-site's order, which a flat map read as the base and never checked
+  const out = run(build("skin-above", { tokens: SKIN("  --text-soft: #9a9a9a;") + TOKENS }));
+  expect("[2] FAILS a skin's own pair, named by the skin, where the skin sits above :root",
+    failsAny(out, 'skin "nacht": --text-soft on --bg = 2.81'), verdicts(out, "FAIL").join(" | "));
+  // REGRESSION GUARD, not a control: main scored the base here too, since the base block came later
+  expect("and still scores the base :root's own value", passes(out, "--text-soft on --bg = 7.00"), lineOf(out, "--text-soft on --bg"));
+  expect("and states the skin's own denominator, its FAIL lines counted", notes(out, 'skin "nacht": [data-skin="nacht"]:root scored as its own map') &&
+    /: \d+ assertion\(s\) covering \d+ distinct pair\(s\).*; [1-9]\d* FAIL line\(s\) of its own/.test(lineOf(out, "scored as its own map")), lineOf(out, "scored as its own map"));
+}
+{
+  // PLANT: the skin BELOW :root, which a flat map scored IN PLACE OF the base, unnamed
+  const out = run(build("skin-below", { tokens: TOKENS + SKIN("  --text-soft: #9a9a9a;") }));
+  expect("[2] scores the base where a later skin block used to replace it",
+    passes(out, "--text-soft on --bg = 7.00") && failsAny(out, 'skin "nacht": --text-soft on --bg = 2.81'), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // CONTROL: a skin whose values all clear prints no verdict line of its own beyond its summary
+  const out = run(build("skin-clean", { tokens: TOKENS + SKIN("  --text-soft: #4a4a4a;") }));
+  expect("[2] passes a skin whose pairs all clear, and it fails nothing",
+    !verdicts(out, "FAIL").some((l) => l.includes('skin "nacht"')) && passes(out, 'skin "nacht": --text-soft on --bg'), verdicts(out, "FAIL").join(" | "));
+  expect("and its summary counts the lines identical to the base pass", /\d+ line\(s\) identical to the base pass not repeated/.test(lineOf(out, "scored as its own map")), lineOf(out, "scored as its own map"));
+}
+{
+  // a skin overriding a colour with a value [2] cannot read DROPS it rather than scoring the base value
+  const out = run(build("skin-unread", { tokens: TOKENS + SKIN("  --text-soft: var(--text);") }));
+  expect("[2] names a skin colour it cannot read", notes(out, 'skin "nacht": colour token(s) declared with a value [2] cannot read') &&
+    lineOf(out, "cannot read, so they are dropped").includes("--text-soft"), lineOf(out, "cannot read"));
+}
+{
+  // CONTROL: no skin block says so
+  const out = run(build("skin-none", {}));
+  expect("[2] says when tokens.css carries no skin", notes(out, "carries no [data-skin] block"));
+  // FOLD of #25's review, F4: the base pass has no skin, so its slot note speaks of the map it read
+  expect("and the base pass's slot note names the map, not a skin", lineOf(out, "hue slot pairs:").includes("every --hue-N the map declares"), lineOf(out, "hue slot pairs:"));
+}
+{
+  // PLANT: a declared slot past the old bound (7) is gated; #ffffff on #8a8a8a is 3.45
+  const out = run(build("hue-seven", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #ffffff;\n}") }));
+  expect("[2] FAILS a declared --hue-7 pair, past any bound", failsAny(out, "--hue-7-ink on --hue-7 = 3.45"), verdicts(out, "FAIL").join(" | "));
+  expect("and the slot note names every declared slot", lineOf(out, "hue slot pairs:").includes("--hue-1, --hue-3, --hue-7"), lineOf(out, "hue slot pairs:"));
+  // CONTROL: the same slot with an ink that clears (#111111 on #8a8a8a is 5.47)
+  const ok7 = run(build("hue-seven-ok", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n}") }));
+  expect("and passes it with an ink that clears", passes(ok7, "--hue-7-ink on --hue-7 = 5.47"), lineOf(ok7, "--hue-7-ink"));
+}
+{
+  // FOLD of #25's review, F1. PLANT: a slot declaring --hue-7 and its ink but no --hue-7-text derives
+  // the one pair it can assert. #25's head derived the three text pairs too and asserted and named
+  // none of them (zuidgeluid-site: 51 derived, 48 asserted, 0 token(s) unresolvable).
+  const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) derived, (\d+) asserted/) || []).slice(1).map(Number);
+  const [d0, a0] = den(run(build("hue-partial-base", {})));
+  const [d1, a1] = den(run(build("hue-partial", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n}") })));
+  expect("[2] derives no pair for a --hue-N-text the map does not declare", d1 - d0 === 1 && a1 - a0 === 1, `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1}`);
+  // CONTROL, and a REGRESSION GUARD: the text twin declared, all four derived and asserted (#333333
+  // clears 4.5 on all three grounds)
+  const [d2, a2] = den(run(build("hue-partial-text", { tokens: TOKENS.replace("}", "  --hue-7: #8a8a8a;\n  --hue-7-ink: #111111;\n  --hue-7-text: #333333;\n}") })));
+  expect("and derives and asserts all four once the twin is declared", d2 - d0 === 4 && a2 - a0 === 4, `derived ${d0} -> ${d2}, asserted ${a0} -> ${a2}`);
+}
+{
+  // PLANT: a slot only the SKIN declares is scored in the skin's pass
+  const out = run(build("skin-hue", { tokens: TOKENS + SKIN("  --hue-6: #8a8a8a;\n  --hue-6-ink: #ffffff;") }));
+  expect("[2] FAILS a hue pair only a skin declares, named by the skin", failsAny(out, 'skin "nacht": --hue-6-ink on --hue-6 = 3.45'), verdicts(out, "FAIL").join(" | "));
+}
+
+// ---- C14. R111: [5] reads a route file's path by TanStack Router's file convention -------------
+const ROUTE = (title) => `export const Route = { head: () => ({ title: "${title}" }) };\n`;
+const CHARTER_OF = (paths) => "# charter\n\n```routes\n" + paths.join("\n") + "\n```\n";
+{
+  // CONTROL: a dotted and a nested route reconcile against the paths the router serves
+  const fx = build("routes-nested", { files: {
+    "src/routes/takken.kapoenen.tsx": ROUTE("Kapoenen"), "src/routes/takken/welpen.tsx": ROUTE("Welpen"),
+    "demo-site-charter.md": CHARTER_OF(["/", "/takken/kapoenen", "/takken/welpen"]) }, charterFile: null });
+  const out = run(fx, { args: ["--charter", join(fx.site, "demo-site-charter.md")] });
+  expect("[5] reads takken.kapoenen.tsx as /takken/kapoenen and takken/welpen.tsx as /takken/welpen",
+    passes(out, "charter <-> repo routes reconcile both ways (3 declared, 3 built)"), lineOf(out, "charter"));
+}
+{
+  // PLANT: the basename reading in the charter is now the wrong one, both ways
+  const fx = build("routes-basename", { files: {
+    "src/routes/takken.kapoenen.tsx": ROUTE("Kapoenen"), "src/routes/takken/welpen.tsx": ROUTE("Welpen"),
+    "demo-site-charter.md": CHARTER_OF(["/", "/takken.kapoenen", "/welpen"]) }, charterFile: null });
+  const out = run(fx, { args: ["--charter", join(fx.site, "demo-site-charter.md")] });
+  expect("[5] FAILS a charter declaring the basename paths",
+    fails(out, "charter declares route(s) that do not exist in the repo: /takken.kapoenen, /welpen"), lineOf(out, "charter declares"));
+  expect("and names the router's paths as orphans", fails(out, "not declared in charter (orphan)") &&
+    ["/takken/kapoenen", "/takken/welpen"].every((p) => lineOf(out, "(orphan)").includes(p)), lineOf(out, "orphan"));
+}
+{
+  // CONTROL: the rest of the convention, index, groups, pathless layouts, `_` suffix, escapes, lazy, ignored
+  const fx = build("routes-convention", { files: {
+    "src/routes/_layout.tsx": ROUTE("Layout"), "src/routes/(info)/about.tsx": ROUTE("About"),
+    "src/routes/posts/index.tsx": ROUTE("Posts"), "src/routes/posts_.edit.tsx": ROUTE("Edit"),
+    "src/routes/feed[.]xml.tsx": ROUTE("Feed"), "src/routes/kalender.lazy.tsx": ROUTE("Kalender"),
+    "src/routes/-helpers.tsx": ROUTE("Helpers"),
+    "demo-site-charter.md": CHARTER_OF(["/", "/about", "/posts", "/posts/edit", "/feed.xml", "/kalender"]) }, charterFile: null });
+  const out = run(fx, { args: ["--charter", join(fx.site, "demo-site-charter.md")] });
+  expect("[5] reconciles every path the convention gives", passes(out, "reconcile both ways (6 declared, 6 built)"), lineOf(out, "charter"));
+  expect("and names the files with no path of their own", notes(out, "declare no path of their own") &&
+    lineOf(out, "declare no path of their own").includes("_layout.tsx") && lineOf(out, "declare no path of their own").includes("-helpers.tsx"),
+    lineOf(out, "no path of their own"));
+}
+
+// ---- C15. R063: a hue ground through a component prop or an inline style -----------------------
+// zuidgeluid-site's IlluStage in its shape: an aria-hidden stage whose `sheet` prop is a background.
+const UI = `export function IlluStage({ sheet, children }: { sheet: string; children: React.ReactNode }) {
+  return <div aria-hidden="true"><div style={{ position: "absolute", background: sheet }} />{children}<FStar color="var(--accent)" /></div>;
+}
+export function Chip({ bg, children }) {
+  return <span style={{ background: bg, color: "var(--on-dark)" }}>{children}</span>;
+}
+`;
+const PAGE = (body) => `export const Route = { head: () => ({ title: "Home" }) };\nexport const Page = () => ${body};\n`;
+{
+  // CONTROL, the ZG shape: an image on the stage composes the ground and puts no text on it
+  const out = run(build("ground-illustage", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="paper"><IlluStage sheet="var(--hue-3)"><img src="/x.svg" alt="" /></IlluStage></Section>`) }));
+  const l = lineOf(out, "hue grounds through a component prop or an inline style");
+  expect("[2] reaches a hue ground composed through a component prop", notes(out, "hue grounds through a component prop") &&
+    l.includes("1 slot(s) composed (--hue-3 via <IlluStage sheet> (src/content/ui.tsx))") && l.includes("0 pair(s) added"), l);
+  expect("and the slot is no longer counted as UNCOMPOSED", !lineOf(out, "declared but UNCOMPOSED").includes("--hue-3"), lineOf(out, "UNCOMPOSED"));
+  expect("and the denominator counts it by route", lineOf(out, "AA denominator").includes("1 by a component prop or an inline style"), lineOf(out, "AA denominator"));
+  // REGRESSION GUARD, not a control: main scored nothing on this ground at all, so it fails nothing there either
+  expect("and nothing fails on that ground", !verdicts(out, "FAIL").some((v) => v.includes("--hue-3")), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // PLANT: text on the stage inherits the dark section's ink, #ffffff on #8a8a8a = 3.45
+  const out = run(build("ground-illustage-text", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="dark"><IlluStage sheet="var(--hue-3)"><p>Zing mee</p></IlluStage></Section>`) }));
+  expect("[2] FAILS text inside the stage in the ink it inherits from the section",
+    verdicts(out, "FAIL").some((v) => v.includes("--on-dark on --hue-3 [text inside <IlluStage sheet> (src/content/ui.tsx) inherits the section ink, tone=dark") && v.includes("= 3.45")), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // CONTROL: an arrow function in a child's attribute is not text on the stage
+  const out = run(build("ground-illustage-arrow", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="dark"><IlluStage sheet="var(--hue-3)"><img src="/x.svg" alt="" onLoad={() => mark("x")} /></IlluStage></Section>`) }));
+  expect("[2] reads an arrow function in a child's attribute as no text on the ground",
+    lineOf(out, "hue grounds through a component prop").includes("0 pair(s) added") && !verdicts(out, "FAIL").some((v) => v.includes("--hue-3")), lineOf(out, "hue grounds through"));
+}
+{
+  // PLANT: a colour the component's own body declares on its ground
+  const out = run(build("ground-chip", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="paper"><Chip bg="var(--hue-3)">nieuw</Chip></Section>`) }));
+  expect("[2] FAILS the colour a component declares on the ground its prop sets",
+    verdicts(out, "FAIL").some((v) => v.includes("--on-dark on --hue-3 [the colour <Chip bg> (src/content/ui.tsx) declares, on hue 3") && v.includes("= 3.45")), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // CONTROL: an inline style background with text on a light section (#111111 on #8a8a8a = 5.47)
+  const out = run(build("ground-inline", {
+    indexTsx: PAGE(`<Section tone="paper"><div style={{ background: "var(--hue-3)" }}>Hallo</div></Section>`) }));
+  expect("[2] scores text on an inline style hue ground and passes it",
+    passes(out, "--text on --hue-3 [text inside an inline style background on <div> inherits the section ink, tone=paper") && lineOf(out, "--text on --hue-3 [").includes("= 5.47"), lineOf(out, "--text on --hue-3"));
+}
+{
+  // a gradient is no single colour: named, never scored; a stroke is not a ground, and is counted
+  const out = run(build("ground-gradient", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="dark"><IlluStage sheet="linear-gradient(135deg, var(--hue-3), var(--accent))"><p>t</p></IlluStage><svg><path stroke="var(--hue-3)" /></svg></Section>`) }));
+  const l = lineOf(out, "hue grounds through a component prop or an inline style");
+  expect("[2] names a gradient ground and scores nothing on it", l.includes("1 ground(s) that are not one flat slot named and not scored") &&
+    !verdicts(out, "FAIL").some((v) => v.includes("--hue-3")), l);
+  expect("and counts the stroke as a reference it did not place", l.includes("1 of 2 var(--hue-N) reference(s)") && l.includes("src/routes/index.tsx (1)"), l);
+}
+{
+  // FOLD of #25's review, F5. PLANT: a hue ground in a site's own component markup outside src/content
+  // and src/routes is not placed, so the line states that scope and counts the markup's references by
+  // file as not read. The spine's own markup is not counted (its hue grounds are <Section hue>).
+  const out = run(build("ground-outside-scope", { files: {
+    "src/components/Banner.tsx": `export const Banner = () => <div style={{ background: "var(--hue-3)" }}>Hallo</div>;\n`,
+    "src/components/spine/Hue.tsx": `export const Hue = () => <div style={{ background: "var(--hue-3)" }} />;\n` } }));
+  const l = lineOf(out, "hue grounds through a component prop or an inline style");
+  expect("[2] counts var(--hue-N) in markup outside src/content and src/routes as not read, by file",
+    l.includes("markup elsewhere under src/ outside the spine is not read, 1 var(--hue-N) reference(s) there: src/components/Banner.tsx (1)"), l);
+  // REGRESSION GUARD, not a control: #25's head counted no markup outside the scope at all
+  expect("and does not count the spine's own markup", !l.includes("spine/Hue.tsx"), l);
+  // CONTROL: with no such markup the clause still states the scope, at zero
+  const ok0 = lineOf(run(build("ground-in-scope", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="paper"><IlluStage sheet="var(--hue-3)"><img src="/x.svg" alt="" /></IlluStage></Section>`) })), "hue grounds through");
+  expect("and states the scope at zero where there is none", ok0.includes("(src/content, src/routes) placed as a ground") &&
+    ok0.includes("not read, 0 var(--hue-N) reference(s) there"), ok0);
+}
+{
+  // an undeclared slot stays inert (S4.6), as it does through a carrier
+  const out = run(build("ground-undeclared", { files: { "src/content/ui.tsx": UI },
+    indexTsx: PAGE(`<Section tone="dark"><IlluStage sheet="var(--hue-2)"><p>t</p></IlluStage></Section>`) }));
+  expect("[2] composes nothing through an undeclared slot", lineOf(out, "hue grounds through a component prop").includes("0 slot(s) composed"), lineOf(out, "hue grounds through"));
+}
+
+// ---- C16. R109: [11] a public/ file a built page links reaches the published build byte for byte --
+const PDF = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x0a, 0xff, 0xfe, 0x00, 0x80, 0x0a]);
+const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="/plans?x=1">Plans</a></body></html>\n';
+{
+  // CONTROL: the linked copy is the source
+  const out = run(build("dist-control", { files: { "public/menu.pdf": PDF, "dist/client/index.html": LINKS, "dist/client/menu.pdf": PDF } }));
+  expect("[11] passes a build whose linked public/ file is byte-identical in dist/client",
+    passes(out, "1 public/ file(s) linked from 1 built page(s) are byte-identical in dist/client"), lineOf(out, "built page(s)"));
+}
+{
+  // PLANT: the crawl's text rewrite of a linked binary, invalid bytes replaced as a text decode does
+  const out = run(build("dist-rewritten", { files: { "public/menu.pdf": PDF, "dist/client/index.html": LINKS,
+    "dist/client/menu.pdf": Buffer.from(PDF.toString("utf8"), "utf8") } }));
+  expect("[11] FAILS a linked copy that differs from its source, and names it", fails(out, "dist/client copy differs from its public/ source for linked file(s): menu.pdf"), lineOf(out, "linked file(s)"));
+}
+{
+  // FOLD of #25's review, F2. A linked public/ file with no copy at the same path is the build's
+  // layout, not the crawl's rewrite (the crawl only writes): named and not compared, never failed
+  const out = run(build("dist-absent", { files: { "public/menu.pdf": PDF, "dist/client/index.html": LINKS } }));
+  expect("[11] names a linked public/ file with no copy in dist/client and fails nothing",
+    notes(out, "linked public/ file(s) with no copy at the same path in dist/client, so not compared: menu.pdf") && !verdicts(out, "FAIL").length,
+    lineOf(out, "menu.pdf") + " | " + verdicts(out, "FAIL").join(" | "));
+  expect("and its pass line counts only what it compared", passes(out, "0 public/ file(s) linked from 1 built page(s) are byte-identical"), lineOf(out, "built page(s)"));
+}
+{
+  // PLANT: an absent copy beside a rewritten one still FAILS the rewrite, and names the absent one
+  const out = run(build("dist-absent-rewritten", { files: { "public/menu.pdf": PDF, "public/kaart.pdf": PDF,
+    "dist/client/index.html": LINKS.replace('<a href="/plans', '<a href="/kaart.pdf">Kaart</a> <a href="/plans'),
+    "dist/client/kaart.pdf": Buffer.from(PDF.toString("utf8"), "utf8") } }));
+  expect("[11] FAILS the rewritten copy beside an absent one", fails(out, "dist/client copy differs from its public/ source for linked file(s): kaart.pdf") &&
+    notes(out, "so not compared: menu.pdf"), lineOf(out, "linked file(s)") + " | " + lineOf(out, "not compared"));
+}
+{
+  // CONTROL: a file no page links is not the crawl's to overwrite, and a build plugin may rewrite it
+  const out = run(build("dist-unlinked", { files: { "public/menu.pdf": PDF, "public/_headers": "/*\n  X-A: 1\n",
+    "dist/client/index.html": LINKS, "dist/client/menu.pdf": PDF, "dist/client/_headers": "/*\n  X-A: 1\n/* /.netlify/functions/server 200\n" } }));
+  expect("[11] compares only what a built page links", passes(out, "1 public/ file(s) linked from 1 built page(s)") && !out.includes("_headers"), lineOf(out, "built page(s)"));
+}
+{
+  // CONTROL: the directory read is the one netlify.toml publishes
+  const out = run(build("dist-publish", { files: { "netlify.toml": '[build]\n  publish = "dist"\n', "public/menu.pdf": PDF,
+    "dist/index.html": LINKS, "dist/menu.pdf": PDF } }));
+  expect("[11] reads the directory netlify.toml publishes", passes(out, "are byte-identical in dist (R109)"), lineOf(out, "built page(s)"));
+}
+{
+  // no build to read is UNVERIFIED: a warning locally and a failure under --ci
+  const fx = build("dist-none", {});
+  expect("[11] warns when there is no publish directory to read", warns(run(fx), "no dist/client to read"), lineOf(run(fx), "dist/client"));
+  expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no dist/client to read"), lineOf(run(fx, { args: ["--ci"] }), "dist/client"));
+}
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
 console.log("fill-in branches attacker-2 measured as uncovered, one control, and the checks added");
 console.log("2026-10-11 (C7 field edge R121, C8 crumb inks R122, C9 six hue slots R112, C10 non-grounding");
 console.log("carriers R120, C11 [10] phone menu R125), and the fold of #24's review (C7 focus edge, C8 accent");
-console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview card and og:locale R221).");
+console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview card and og:locale R221), and brief W14");
+console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
+console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
+console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");
