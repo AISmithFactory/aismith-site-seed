@@ -70,7 +70,7 @@ charter now fails S8.4a at the gate.
   no hub edit-flow.
 
 ## SEO & assets (S7)
-- Per-route `head()` on every route (title, description, OG); `lang="en"` hard-set in
+- Per-route `head()` on every route (title, description, OG); `lang="en-GB"` hard-set in
   `__root`; `public/sitemap.xml` + `public/robots.txt` shipped.
 - **The concept build ships a PLACEHOLDER link-preview card**, `public/og-card.png` (1200 x 630,
   saying on its face that it is a placeholder), behind an ABSOLUTE `og:image` with its type,

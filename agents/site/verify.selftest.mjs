@@ -19,6 +19,14 @@
 // carriers and the raw data-hue-tint attribute (R120), C11 the [10] open phone menu (R125). The
 // sections that predate both runs are still NOT covered.
 //
+// FOLDED the same day from the code review of PR #24, each finding with its own plant and control:
+// C7 the FOCUSED field edge (F2); C8 the crumb inks on the ACCENT ground, held where no crumb is
+// composed there and asserted where one is (F1); C10 the bare [data-hue-tint] form the guard could
+// not read (F3), and the carrier and family sweeps reading CSS-only, markup-only and class-keyed
+// forms (F7); C11 [10] reading every rule in the file through the cascade, and the display, height
+// and overflow it never asserted (F4); C12 the link-preview card against its own bytes (F6) and
+// og:locale against <html lang> (F9), both in [4].
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -107,6 +115,7 @@ const SPINE_CSS = `[data-tone="paper"] { --sec-bg: var(--bg); --sec-text: var(--
 // spine's shape. The tokens declare no --line-input, so the edge falls back to --text-soft.
 `.form-card { background: var(--card-bg, var(--surface)); }
 .form-card input, .form-card textarea, .form-card select { background: var(--bg); border: 2px solid var(--line-input, var(--text-soft)); }
+.form-card input:focus, .form-card textarea:focus, .form-card select:focus { border-color: var(--accent); }
 .crumb { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
 .crumb a { color: var(--sec-soft, var(--tone-soft, var(--text-soft))); }
 .crumb a:hover { color: var(--sec-accent, var(--tone-accent, var(--accent-text))); }
@@ -173,8 +182,9 @@ function build(name, mut = {}) {
     put(base, "src/components/spine/index.tsx", SPINE_TSX);
   }
   put(site, "src/styles/tokens.css", mut.tokens ?? TOKENS);
-  put(site, "src/content/site.config.tsx", CONFIG);
-  put(site, "src/routes/__root.tsx", ROOT_TSX);
+  put(site, "src/content/site.config.tsx", mut.config ?? CONFIG);
+  put(site, "src/routes/__root.tsx", mut.rootTsx ?? ROOT_TSX);
+  for (const [rel, body] of Object.entries(mut.files || {})) put(site, rel, body);
   put(site, "src/routes/index.tsx", mut.indexTsx ?? INDEX_TSX);
   put(site, "public/sitemap.xml", "<urlset/>\n");
   put(site, "public/robots.txt", "User-agent: *\n");
@@ -216,7 +226,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, and the review fold of #24)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -225,13 +235,14 @@ console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (
   for (const sub of ["SEED_REPO names THIS repository", "field SEED_REF is absent",
                      "is NOT a full 40-character sha", "no such file exists in this repo",
                      "omits the S8 record for lane(s)", "present but incomplete",
-                     "HUE_CARRIERS does not name"]) {
+                     "HUE_CARRIERS does not name", "HUE_FAMILIES does not name"]) {
     expect(`control is silent on: ${sub}`, !out.includes(sub), lineOf(out, sub));
   }
   expect("control passes the S8 lane record", passes(out, "all 5 intake lanes carry an S8 record"), lineOf(out, "intake lanes"));
   expect("control states what [9] cannot prove", out.includes("THIS CHECK CANNOT PROVE A LANE WAS RUN"));
   expect("control passes both [8] fill-in fields", passes(out, "SEED_REF is a full 40-character sha") && passes(out, "field CHARTER names a file that exists"), lineOf(out, "SEED_REF"));
   expect("control composes no hue, so no carrier pair is added", !out.includes("hue carriers beyond <Section hue>"), lineOf(out, "hue carriers"));
+  expect("control declares no og block, so [4] notes the card is not checked", notes(out, "declares no og.image"), lineOf(out, "og.image"));
 }
 
 // ---- C2. row 107: the seed-role carve-out is granted only to a CANON-DECLARED seed ------------
@@ -446,7 +457,24 @@ const EDGE_OK = "var(--line-input, var(--text-soft))";
   expect("[2] scores the field edge against the field and passes it",
     passes(out, "form field edge --text-soft vs the field --bg"), lineOf(out, "form field edge"));
   expect("and against the card", passes(out, "form field edge --text-soft vs the card --surface"), lineOf(out, "vs the card"));
-  expect("and the denominator counts the non-text pairs", lineOf(out, "AA denominator").includes("2 non-text pair(s) asserted at 3.0"), lineOf(out, "AA denominator"));
+  expect("and the focused edge against both", passes(out, "form field focus edge --accent vs the field --bg") && passes(out, "form field focus edge --accent vs the card --surface"), lineOf(out, "focus edge"));
+  expect("and the denominator counts the non-text pairs, rest and focus", lineOf(out, "AA denominator").includes("4 non-text pair(s) asserted at 3.0"), lineOf(out, "AA denominator"));
+}
+{
+  // PLANT (F2): the FOCUS rule alone drawn in --line, the rest edge untouched and green
+  const fx = build("field-focus-line", {
+    spineCss: SPINE_CSS.replace(":focus { border-color: var(--accent); }", ":focus { border-color: var(--line); }"),
+    tokens: TOKENS.replace("}", "  --line: rgba(17, 17, 17, .12);\n}"),
+  });
+  const out = run(fx);
+  expect("[2] FAILS a focus edge drawn in --line while the rest edge passes",
+    failsAny(out, "form field focus edge --line (rgba flattened over the field --bg") && passes(out, "form field edge --text-soft vs the field --bg"), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // a spine with no focus rule leaves the focused field unscored: a warning locally, a failure under --ci
+  const fx = build("field-focus-absent", { spineCss: SPINE_CSS.split("\n").filter((l) => !l.includes(":focus")).join("\n") });
+  expect("[2] warns when there is no focus rule to score", warns(run(fx), "cannot score the form field focus edge"), lineOf(run(fx), "focus edge"));
+  expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "cannot score the form field focus edge"), lineOf(run(fx, { args: ["--ci"] }), "focus edge"));
 }
 {
   // PLANT: the edge drawn in the rule-and-divider token, as at b8074088 (1.27 and 1.38 on the seed's skin)
@@ -484,7 +512,32 @@ const EDGE_OK = "var(--line-input, var(--text-soft))";
   expect("[2] scores .crumb and its hover on a light tone", passes(out, "[crumb ink .crumb + .crumb a:hover, tone=paper]"), lineOf(out, "tone=paper]"));
   expect("and on a dark tone", passes(out, "[crumb ink .crumb + .crumb a:hover, tone=dark]"), lineOf(out, "tone=dark]"));
   expect("and the link at rest", passes(out, "[crumb ink .crumb a, tone=paper]"), lineOf(out, "crumb ink .crumb a, tone=paper"));
-  expect("and the accent tone is held out (large display only)", !out.includes("crumb ink .crumb + .crumb a:hover, tone=accent"));
+  expect("and the note says how many crumb pairs are new to the matrix", lineOf(out, "crumb inks:").includes("new to the matrix"), lineOf(out, "crumb inks:"));
+}
+// THE ACCENT GROUND (F1). The base spine has no accent tone, so the hold-out the first push asserted
+// held by construction. These two cases carry the tone: --on-dark on --accent is 5.50 and
+// --on-dark-soft (#d0d0d0) on --accent is 3.57, so the crumb link at rest fails 4.5 there.
+const ACCENT_TONE_CSS = `[data-tone="accent"] { --sec-bg: var(--accent); --sec-text: var(--on-dark); --sec-soft: var(--on-dark-soft); --tone-accent: var(--on-dark); }\n`;
+{
+  // CONTROL: no crumb composed on the accent ground, so its pairs are SCORED and printed, never asserted
+  const out = run(build("crumb-accent-held", { spineCss: SPINE_CSS + ACCENT_TONE_CSS }));
+  const l = lineOf(out, "crumb inks on the accent ground, NOT ASSERTED");
+  expect("[2] scores the crumb inks on the accent ground and names each with its ratio",
+    notes(out, "crumb inks on the accent ground, NOT ASSERTED") && l.includes("--on-dark-soft on --accent = 3.57 (< 4.5)") && l.includes("--on-dark on --accent = 5.50"), l);
+  expect("and asserts none of them where no crumb sits there", !verdicts(out, "FAIL").concat(verdicts(out, "PASS")).some((v) => v.includes("tone=accent]")), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // PLANT: a <Crumb> composed in an accent-tone Section asserts them at 4.5
+  const out = run(build("crumb-accent-composed", {
+    spineCss: SPINE_CSS + ACCENT_TONE_CSS,
+    indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
+export const Page = () => <Section tone="accent"><Crumb up={{ label: "Home", href: "/" }}>Plans</Crumb></Section>;
+`,
+  }));
+  expect("[2] FAILS the crumb link at rest on the accent ground once a crumb sits there",
+    failsAny(out, "--on-dark-soft on --accent [crumb ink .crumb a, tone=accent]"), verdicts(out, "FAIL").join(" | "));
+  expect("and passes the pair that clears 4.5 there", passes(out, "--on-dark on --accent [crumb ink .crumb + .crumb a:hover, tone=accent]"), lineOf(out, "tone=accent]"));
+  expect("and says why the accent ground is asserted", notes(out, "a <Crumb> is composed in an accent-tone Section"), lineOf(out, "is composed in an accent"));
 }
 {
   // PLANT: the hover painted in the FILL token, as at b8074088. --accent #c0632e on #ffffff is 4.15
@@ -561,6 +614,45 @@ export const Page = () => <Section tone="paper"><div data-hue-tint={3}><span cla
   expect("[2] scores an ink on a --hue-tint ground composed by the raw attribute",
     failsAny(out, "--on-dark on --hue-3") && lineOf(out, "hue carriers beyond").includes("data-hue-tint=3"), lineOf(out, "hue carriers beyond"));
 }
+{
+  // PLANT (F3): ONE bare-attribute block grounds every tint carrier at once
+  const fx = build("tint-grounds-bare", { spineCss: SPINE_CSS + "[data-hue-tint] { background: var(--hue-tint); color: var(--on-dark); --sec-text: var(--on-dark); }\n" });
+  const out = run(fx);
+  const l = lineOf(out, "non-grounding hue carrier block(s) set a ground or an ink");
+  expect("[2] FAILS a bare [data-hue-tint] block that grounds", fails(out, "non-grounding hue carrier block(s) set a ground or an ink") && l.includes("[data-hue-tint] sets background, color, --sec-text"), l);
+}
+{
+  // and the bare data-hue-bar form, held to the same rule
+  const fx = build("bar-grounds-bare", { spineCss: SPINE_CSS + ".tier-card[data-hue-bar] { background: var(--tier-bar); }\n" });
+  const out = run(fx);
+  expect("[2] FAILS a bare .tier-card[data-hue-bar] block that grounds", fails(out, "set a ground or an ink") && lineOf(out, "set a ground or an ink").includes(".tier-card[data-hue-bar] sets background"), lineOf(out, "set a ground"));
+}
+{
+  // PLANT (F7): a CSS-only carrier family, with no component, is named by both sweeps
+  const fx = build("carrier-css-only", { spineCss: SPINE_CSS + '[data-hue-wash="1"] { --hue-wash: var(--hue-1, var(--accent)); }\n' });
+  const out = run(fx);
+  expect("[2] names a carrier attribute that only spine.css keys on",
+    notes(out, "HUE_CARRIERS does not name") && lineOf(out, "HUE_CARRIERS does not name").includes("data-hue-wash"), lineOf(out, "HUE_CARRIERS does not name"));
+  expect("and names its family as unchecked for slots",
+    notes(out, "HUE_FAMILIES does not name") && lineOf(out, "HUE_FAMILIES does not name").includes('[data-hue-wash="N"]'), lineOf(out, "HUE_FAMILIES does not name"));
+}
+{
+  // a carrier written only in the markup is named too
+  const out = run(build("carrier-markup-only", {
+    indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
+export const Page = () => <Section tone="paper"><div data-hue-sheet={2}>x</div></Section>;
+`,
+  }));
+  expect("[2] names a carrier attribute that only the markup writes",
+    lineOf(out, "HUE_CARRIERS does not name").includes("data-hue-sheet"), lineOf(out, "HUE_CARRIERS does not name"));
+}
+{
+  // PLANT (F7): a CLASS-keyed family stopping at five is named, since .em-hue-N proves the form exists
+  const fx = build("family-class-unlisted", { spineCss: SPINE_CSS + [1, 2, 3, 4, 5].map((n) => `.badge-hue-${n} { color: var(--hue-${n}-text, currentColor); }\n`).join("") });
+  const out = run(fx);
+  expect("[2] names a class-keyed hue family HUE_FAMILIES does not list",
+    notes(out, "HUE_FAMILIES does not name") && lineOf(out, "HUE_FAMILIES does not name").includes(".badge-hue-N") && !lineOf(out, "HUE_FAMILIES does not name").includes(".em-hue-N"), lineOf(out, "HUE_FAMILIES does not name"));
+}
 
 // ---- C11. R125: [10] the open phone menu shows a nav item's children ----------------------------
 const PHONE_RULE = "  .header.nav-open .nav .submenu { position: static; opacity: 1; visibility: visible; transform: none; padding: 0 0 0 18px; }\n";
@@ -585,10 +677,97 @@ const PHONE_RULE = "  .header.nav-open .nav .submenu { position: static; opacity
   expect("[10] FAILS a submenu that is not indented", fails(out, "open phone menu (@media") && lineOf(out, "open phone menu (@media").includes("an indent under its parent"), lineOf(out, "open phone menu (@media"));
 }
 {
+  // PLANT A (F4): a SECOND phone-width block, later and at the same specificity, hides the children
+  // again. (A lower-specificity `.nav-open .submenu { display: none; }` hides them too, because the
+  // phone rule sets no display to outrank it, and [10] reads it so.)
+  const out = run(build("phone-menu-override", { spineCss: SPINE_CSS + "@media (max-width: 900px) {\n  .header.nav-open .nav .submenu { display: none; }\n}\n" }));
+  const l = lineOf(out, "open phone menu (@media");
+  expect("[10] FAILS a later block that sets display: none on the submenu", fails(out, "open phone menu (@media") && l.includes("a display other than none") && l.includes("1 of them outside the phone block"), l);
+}
+{
+  // PLANT B (F4): the shipped rule collapsed to no height and clipped
+  const out = run(build("phone-menu-collapsed", { spineCss: SPINE_CSS.replace(PHONE_RULE, PHONE_RULE.replace(" }\n", " max-height: 0; overflow: hidden; }\n")) }));
+  expect("[10] FAILS a submenu with a zero max-height", fails(out, "open phone menu (@media") && lineOf(out, "open phone menu (@media").includes("a height (a zero height or max-height"), lineOf(out, "open phone menu (@media"));
+}
+{
+  // a height-bounded list that clips is the same defect with a non-zero number
+  const out = run(build("phone-menu-clipped", { spineCss: SPINE_CSS.replace(PHONE_RULE, PHONE_RULE.replace(" }\n", " max-height: 40px; overflow: hidden; }\n")) }));
+  expect("[10] FAILS a height-bounded submenu that clips", fails(out, "open phone menu (@media") && lineOf(out, "open phone menu (@media").includes("an overflow that does not clip it"), lineOf(out, "open phone menu (@media"));
+}
+{
+  // CONTROL: a later rule that LOSES the cascade (lower specificity, on a property the phone rule
+  // sets) or cannot apply at phone width (a min-width above the phone block) changes nothing, so
+  // reading the whole file is not reading it blindly
+  const out = run(build("phone-menu-cascade-control", { spineCss: SPINE_CSS +
+    ".nav-open .submenu { visibility: hidden; }\n@media (min-width: 1200px) {\n  .header.nav-open .nav .submenu { max-height: 0; }\n}\n" }));
+  expect("[10] passes when the overriding rules lose the cascade or do not apply", passes(out, "every .submenu is static, shown, untransformed and indented"), lineOf(out, "open phone menu (@media"));
+}
+{
   // no phone block to read is UNVERIFIED: a warning locally and a failure under --ci
   const fx = build("phone-menu-noblock", { spineCss: SPINE_CSS.slice(0, SPINE_CSS.indexOf("@media")) });
   expect("[10] warns when no phone block can be read", warns(run(fx), "no media block that hides the desktop .nav"), lineOf(run(fx), "no media block"));
   expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no media block that hides the desktop .nav"), lineOf(run(fx, { args: ["--ci"] }), "no media block"));
+}
+
+// ---- C12. R221: [4] the link-preview card against its own bytes, and og:locale against lang (F6, F9) --
+// A PNG is its signature plus an IHDR chunk, which is all [4] reads; a JPEG is SOI, one APP0 and a
+// start-of-frame. `bytes` pads the file to a size.
+const png = (w, h, bytes = 33) => {
+  const b = Buffer.alloc(Math.max(bytes, 33));
+  b.writeUInt32BE(0x89504e47, 0); b.writeUInt32BE(0x0d0a1a0a, 4); b.writeUInt32BE(13, 8);
+  b.write("IHDR", 12, "ascii"); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+  return b;
+};
+const jpeg = (w, h) => Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08,
+  h >> 8, h & 255, w >> 8, w & 255, 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xd9]);
+const OG = ({ image = "/og-card.png", type = "image/png", locale = "en_GB" } = {}) => CONFIG +
+  `export const og = {\n  image: "${image}",\n  type: "${type}",\n  width: 1200,\n  height: 630,\n  alt: "card",\n  locale: "${locale}",\n};\n`;
+{
+  // CONTROL: a true card, and a locale whose language matches lang="en" (lang carries no region)
+  const out = run(build("og-control", { config: OG(), files: { "public/og-card.png": png(1200, 630) } }));
+  expect("[4] passes a card that is what og says it is", passes(out, "link-preview card public/og-card.png is 1200 x 630 image/png"), lineOf(out, "link-preview card"));
+  expect("and passes og.locale against lang", passes(out, "og.locale en_GB agrees with <html lang=\"en\">"), lineOf(out, "og.locale"));
+}
+{
+  // and the JPEG header is read too
+  const out = run(build("og-jpeg-control", { config: OG({ image: "/og-card.jpg", type: "image/jpeg" }), files: { "public/og-card.jpg": jpeg(1200, 630) } }));
+  expect("[4] reads a JPEG card's start-of-frame", passes(out, "link-preview card public/og-card.jpg is 1200 x 630 image/jpeg"), lineOf(out, "link-preview card"));
+}
+{
+  // PLANT: the card deleted, as the review did
+  const out = run(build("og-missing", { config: OG() }));
+  expect("[4] FAILS an og.image naming a file that does not exist", fails(out, "names public/og-card.png, which does not exist"), lineOf(out, "og.image"));
+}
+{
+  // PLANT: a near-square image behind the declared 1200 x 630
+  const l = lineOf(run(build("og-square", { config: OG(), files: { "public/og-card.png": png(630, 630) } })), "link-preview card public/og-card.png:");
+  expect("[4] FAILS a card that is not 1200 x 630 and is false to og.width x og.height",
+    /^\s*FAIL\s/.test(l) && l.includes("it is 630 x 630, not the 1200 x 630 landscape card") && l.includes("og.width x og.height read 1200 x 630 and the file is 630 x 630"), l);
+}
+{
+  // PLANT: over 300 KB
+  const l = lineOf(run(build("og-heavy", { config: OG(), files: { "public/og-card.png": png(1200, 630, 310 * 1024) } })), "link-preview card public/og-card.png:");
+  expect("[4] FAILS a card over 300 KB", /^\s*FAIL\s/.test(l) && l.includes("over the 300 KB"), l);
+}
+{
+  // PLANT: og.type false to the bytes
+  const l = lineOf(run(build("og-type", { config: OG({ type: "image/jpeg" }), files: { "public/og-card.png": png(1200, 630) } })), "link-preview card public/og-card.png:");
+  expect("[4] FAILS an og.type the file is not", /^\s*FAIL\s/.test(l) && l.includes("og.type reads image/jpeg and the file is image/png"), l);
+}
+{
+  // a card on another host cannot be read from here: REVIEW, never PASS and never FAIL
+  const out = run(build("og-offhost", { config: OG({ image: "https://cdn.example.com/card.png" }) }));
+  expect("[4] reports a card on another host for review", /^\s*REVIEW\s/.test(lineOf(out, "is not on the site's own host")), lineOf(out, "own host"));
+}
+{
+  // PLANT (F9): og.locale and lang name different regions of one language
+  const out = run(build("og-locale-drift", { config: OG(), files: { "public/og-card.png": png(1200, 630) }, rootTsx: ROOT_TSX.replace('lang="en"', 'lang="en-US"') }));
+  expect("[4] FAILS og.locale en_GB against <html lang=\"en-US\">", fails(out, "og.locale en_GB and <html lang=\"en-US\">"), lineOf(out, "og.locale"));
+}
+{
+  // and different languages
+  const out = run(build("og-locale-lang", { config: OG({ locale: "nl_BE" }), files: { "public/og-card.png": png(1200, 630) } }));
+  expect("[4] FAILS og.locale nl_BE against <html lang=\"en\">", fails(out, "og.locale nl_BE and <html lang=\"en\">"), lineOf(out, "og.locale"));
 }
 
 rmSync(ROOT, { recursive: true, force: true });
@@ -596,6 +775,8 @@ console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixtu
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
 console.log("fill-in branches attacker-2 measured as uncovered, one control, and the checks added");
 console.log("2026-10-11 (C7 field edge R121, C8 crumb inks R122, C9 six hue slots R112, C10 non-grounding");
-console.log("carriers R120, C11 [10] phone menu R125). The sections that predate them are NOT covered.");
+console.log("carriers R120, C11 [10] phone menu R125), and the fold of #24's review (C7 focus edge, C8 accent");
+console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview card and og:locale R221).");
+console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

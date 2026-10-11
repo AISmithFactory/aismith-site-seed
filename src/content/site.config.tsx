@@ -46,7 +46,9 @@ export const og = {
   width: 1200,
   height: 630,
   alt: "Placeholder link-preview card: replace public/og-card.png before launch",
-  locale: "en_GB",   // language_TERRITORY; the fleet's Dutch-language sites use nl_BE
+  // language_TERRITORY, the same language as <html lang="en-GB"> in __root, and verify.mjs [4]
+  // fails the two when they disagree. The fleet's Dutch-language sites use nl_BE.
+  locale: "en_GB",
 };
 
 export const nav: NavItem[] = [

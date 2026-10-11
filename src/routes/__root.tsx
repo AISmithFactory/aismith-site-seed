@@ -15,7 +15,7 @@ const Logo = <>AI<span className="dot">·</span>Smith</>;
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en-GB">
       <head><HeadContent /></head>
       <body>
         {children}
