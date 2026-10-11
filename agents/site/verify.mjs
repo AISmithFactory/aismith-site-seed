@@ -386,644 +386,873 @@ function parseAlphaTokens(css) {
   }
   return map;
 }
-const T = parseTokens(stripComments(tokens || ""));
-const TA = parseAlphaTokens(stripComments(tokens || ""));
-const hexOf = (n) => "#" + [n.r, n.g, n.b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
-function flattenOver(name, groundHex) {
-  const c = TA[name];
-  if (!c || !groundHex) return null;
-  let g = groundHex.replace("#", "");
-  if (g.length === 3) g = g.split("").map((x) => x + x).join("");
-  const gr = parseInt(g.slice(0, 2), 16), gg = parseInt(g.slice(2, 4), 16), gb = parseInt(g.slice(4, 6), 16);
-  return hexOf({ r: c.a * c.r + (1 - c.a) * gr, g: c.a * c.g + (1 - c.a) * gg, b: c.a * c.b + (1 - c.a) * gb });
-}
-// Resolve one side of a pair to a hex the contrast maths can take. An opaque token answers
-// as itself; a translucent one is flattened over the ground it is being checked against.
-const resolveColour = (name, groundHex = null) =>
-  T[name] ?? (groundHex ? flattenOver(name, groundHex) : null);
-// The set of tokens a pair referenced and this gate could NOT resolve, reported by name at
-// the end of [2]. A skip nobody can see is the whole defect above.
-const skippedTokens = new Set();
-let flattenedPairs = 0;
-// Normal body-text pairs -- must clear 4.5.
+// EACH SKIN BLOCK IS SCORED AS ITS OWN MAP (R110). parseTokens and parseAlphaTokens each fill ONE
+// map, and they ran over the whole file, so a second block went into the same map as the first and
+// the LATER value of each token won. tokens.css admits a second skin as a selector ending in `:root`
+// ([1c]), written `[data-skin="x"]:root`: sz-site's Nacht skin sat in one flat map with the group's
+// own look, the file's ORDER decided which of the two [2] scored, and the other had an AA record in
+// docs/skin-contrast.md and in nothing here.
 //
-// GENERATED, NOT ENUMERATED (v0.13.9). This was a hardcoded list of 15 tone pairs while
-// S2.3 said "the full matrix", and the gap between those two sentences shipped a live
-// 1.55:1 on zuidgeluid.be. A Section sets `tone` and `hue` INDEPENDENTLY: the ground comes
-// from the hue, the ink still comes from the tone. So `tone="slate" hue={3}` renders a
-// dark-register ink on a light hue ground -- a pair that appeared in no list, because
-// S2.3 owned text x tone, S4.6 owned hue x hue-ink, and neither owned the product.
-// Enumerating cannot express a cross-product; discovering the declared hues can.
-// DERIVED FROM spine.css's [data-tone=...] BLOCKS, not enumerated (site-contract 1.8.24,
-// plan-site-1824-2026-08-27.md M3). The tone map is the thing that decides which ink lands
-// on which ground, so it is the operand; a second copy of it here is a copy that decays.
-// It already had: TONE_GROUNDS named `--slate`, which NO tokens.css declares (the map says
-// `--dark-alt`), so the three slate pairs it listed were silently skipped by the `if (T[bg])`
-// guard downstream and the checker reported OK on a matrix it was not checking.
-//
-// THE PARSER ANCHORS ON THE OPENING BRACE. Contract 1.8.23's E0 split every [data-tone]
-// block across two lines, so a single-line pattern no longer matches: take everything from
-// the brace to the closing brace and read the declarations out of that.
-//
-// THE ACCENT TONE IS DERIVED BUT EXCLUDED FROM THE 4.5 LIST, and that is not a scope
-// judgement: S2.3/S4.3 make accent-as-background large-display-only, and the block further
-// down already checks --on-dark on --accent at the 3.0 threshold. Including it here would
-// assert 4.5 on a pair the standard puts at 3.0.
-const TONE_BLOCKS = (() => {
-  const css = stripComments(read(P.spineCss) || "");
-  const out = {};
-  for (const m of css.matchAll(/\[data-tone=["']?(\w+)["']?\]\s*\{/g)) {
-    const start = m.index + m[0].length;
-    const end = css.indexOf("}", start);
-    if (end < 0) continue;
-    const body = css.slice(start, end);
-    const decl = (name) => {
-      const d = body.match(new RegExp("--" + name + "\\s*:\\s*var\\(\\s*(--[\\w-]+)"));
-      return d ? d[1] : null;
-    };
-    out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("tone-accent") };
-  }
-  return out;
-})();
-if (!Object.keys(TONE_BLOCKS).length) bad("tone map: no [data-tone] blocks parsed out of spine.css (the derivation below is empty)");
-
-const ACCENT_TONE = "accent";   // checked at 3.0 by the accent-as-background block below
-const TONE_GROUNDS = [...new Set(Object.values(TONE_BLOCKS).map((b) => b.bg).filter(Boolean))];
-const TONE_INKS = Object.fromEntries(Object.entries(TONE_BLOCKS).map(
-  ([tone, b]) => [tone, [...new Set([b.text, b.soft, b.accent].filter(Boolean))]]));
-const NORMAL_PAIRS = [];
-for (const [tone, b] of Object.entries(TONE_BLOCKS)) {
-  if (tone === ACCENT_TONE || !b.bg) continue;
-  for (const ink of TONE_INKS[tone]) NORMAL_PAIRS.push([ink, b.bg]);
-}
-note(`tone map derived from spine.css: ${Object.keys(TONE_BLOCKS).length} tone(s), ` +
-     `${TONE_GROUNDS.length} ground(s), ${NORMAL_PAIRS.length} base pair(s) ` +
-     `(${ACCENT_TONE} tone held for the 3.0 check)`);
-// The tone x hue cells that ACTUALLY OCCUR, read from the markup -- not every arithmetic
-// pair. A blind cross-product of six inks x five hues yields 19 "failures" on ZG where two
-// are real, and a checker that fires where there is no defect trains people to ignore it,
-// which lands in the same place as one that checks nothing. So: find every Section that
-// sets BOTH tone and hue, and check exactly the inks that tone puts on that hue's ground.
-// A site that never combines them generates zero extra pairs; an undeclared hue is inert.
-const composed = new Set();
-for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
-  const src = stripComments(read(f) || "");
-  for (const tag of src.matchAll(/<Section\b[^>]*>/g)) {
-    const t = tag[0].match(/tone\s*=\s*["'`](\w+)["'`]/);
-    const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
-    if (!h) continue;                       // no hue -- the tone matrix already covers it
-    const tone = t ? t[1] : "paper";        // no tone -- the default light register
-    composed.add(`${tone}|${h[1]}`);
-  }
-}
-// THE HUE BLOCK, READ AS THE OPERAND IT IS (site-contract 1.8.24 M3's own lesson, applied
-// one level down; backlog rows of 2026-08-27). M3 stopped ENUMERATING the pair list and
-// derived it from the tone map. The loop that replaced it still derived the composed cell's
-// INKS from the tone -- and on a hue ground the hue block has already REPLACED --sec-text,
-// --sec-soft and --sec-accent. So the gate asserted tokens the browser does not paint
-// there: measured 2026-08-27 on zuidgeluid-site with all five --hue-N-accent slots
-// declared, `[2]` still reddened `--on-dark on --hue-3 = 2.06` (the TONE's main text token,
-// which [data-hue] overrides) and exit 1 did not move. A red nobody can act on and a render
-// nobody can trust are the same defect twice.
-//
-// So the inks for a composed cell are RESOLVED THROUGH THE HUE BLOCK'S OWN FALLBACK CHAIN
-// against the skin, exactly as the cascade resolves them.
-const HUE_BLOCKS = (() => {
-  const css = stripComments(read(P.spineCss) || "");
-  const out = {};
-  for (const m of css.matchAll(/\[data-hue=["']?(\d+)["']?\]\s*\{/g)) {
-    const start = m.index + m[0].length;
-    const end = css.indexOf("}", start);
-    if (end < 0) continue;
-    const body = css.slice(start, end);
-    const decl = (name) => {
-      const d = body.match(new RegExp("--" + name + "\\s*:\\s*([^;]+)"));
-      return d ? d[1] : null;
-    };
-    out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("sec-accent") };
-  }
-  return out;
-})();
-// Walk a var(--a, var(--b, var(--c))) chain and return the FIRST name the skin actually
-// declares, mapping --tone-* back through the tone map. Returns null when the whole chain
-// is undeclared, which is the S4.6 "inert" case and stays inert.
-function resolveChain(expr, tone) {
-  if (!expr) return null;
-  for (const m of expr.matchAll(/(--[\w-]+)/g)) {
-    let name = m[1];
-    const role = name.match(/^--tone-(bg|text|soft|accent)$/);
-    if (role) {
-      const b = TONE_BLOCKS[tone] || TONE_BLOCKS.paper;
-      name = b ? b[role[1] === "bg" ? "bg" : role[1]] : null;
-      if (!name) continue;
-    }
-    if (T[name] || TA[name]) return name;
-  }
-  return null;
-}
-// SELECTORS WHOSE INK COMES FROM THE TONE REGARDLESS OF THE GROUND -- the other half of the
-// same defect, and the half no instrument has ever held. A component that reads a token
-// directly rather than --sec-* is INVISIBLE to a model that derives the ink from the tone,
-// which is precisely what the client manifest recorded as `guard_is_partial` and what a
-// controller re-derived from an attacker run four weeks later. The hue block re-grounds the
-// section; it does not reach inside a selector keyed on [data-tone].
-//
-// So: scan spine.css for a rule whose selector carries [data-tone=X] AND a descendant, and
-// whose `color` is a token that is NOT --sec-*. Each one is a real ink on the hue ground,
-// named, and checked there. A selector already reading --sec-* follows the hue and is not
-// a divergence -- which is why widening this set keeps it narrow.
-const TONE_KEYED = [];   // { tone, selector, ink }
-{
-  const css = stripComments(read(P.spineCss) || "");
-  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const body = m[2];
-    const c = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
-    if (!c || c[1].startsWith("--sec-")) continue;
-    for (const part of m[1].split(",")) {
-      const t = part.match(/\[data-tone=["']?(\w+)["']?\]\s*\S/);
-      if (t) TONE_KEYED.push({ tone: t[1], selector: part.trim(), ink: c[1] });
+// So the BASE is every block whose selector is a `:root` with no `data-skin` in it, and each
+// `[data-skin="x"]...:root` block is a SKIN, scored as its own map laid over the base the way the
+// cascade lays it: the skin's selector outranks `:root` by specificity, so a token the skin declares
+// replaces the base value wherever the two blocks sit in the file. A colour token the skin declares
+// with a value [2] cannot read (neither hex nor rgba) is DROPPED from that skin's map and named,
+// because scoring the base value there is a confident number for a colour the browser does not
+// paint. The base pass prints as it always has; a skin's pass prints only the lines that DIFFER from
+// it, each prefixed with the skin, and then one line with that skin's own denominator.
+const TOKEN_BLOCKS = (() => {
+  const base = [], skins = new Map();   // skin name -> { selector, bodies }, in file order
+  for (const m of stripComments(tokens || "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const part of m[1].split(",").map((s) => s.trim())) {
+      if (!/:root$/.test(part)) continue;
+      const skin = part.match(/\[data-skin(?:\s*=\s*["']?([\w-]+)["']?)?\s*\]/);
+      if (!skin) { base.push(m[2]); continue; }
+      const name = skin[1] || part;
+      if (!skins.has(name)) skins.set(name, { selector: part, bodies: [] });
+      skins.get(name).bodies.push(m[2]);
     }
   }
+  return { base: base.join("\n"), skins };
+})();
+const BASE_T = parseTokens(TOKEN_BLOCKS.base);
+const BASE_TA = parseAlphaTokens(TOKEN_BLOCKS.base);
+function skinMaps(css) {
+  const T = { ...BASE_T }, TA = { ...BASE_TA }, ownT = parseTokens(css), ownTA = parseAlphaTokens(css);
+  const declared = new Set([...css.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
+  const unread = [];
+  for (const name of declared) {
+    if (!(name in ownT) && !(name in ownTA) && (name in T || name in TA)) unread.push(name);
+    delete T[name];
+    delete TA[name];
+  }
+  return { T: Object.assign(T, ownT), TA: Object.assign(TA, ownTA), declared, unread };
 }
-if (TONE_KEYED.length) note(`selectors keying ink on the TONE rather than the ground (checked on every composed hue): ` +
-  TONE_KEYED.map((k) => `${k.selector} -> ${k.ink}`).join(" | "));
-
-const composedHues = new Set();
-for (const cell of [...composed].sort()) {
-  const [tone, n] = cell.split("|");
-  const hue = `--hue-${n}`;
-  if (!T[hue] && !TA[hue]) continue;        // undeclared slot is inert (S4.6)
-  composedHues.add(n);
-  const hb = HUE_BLOCKS[n];
-  if (!hb) { note(`hue ${n} is composed in the markup but spine.css declares no [data-hue="${n}"] block`); continue; }
-  // (i) the inks the HUE BLOCK renders, resolved through its own fallback chain.
-  const seen = new Set();
-  for (const role of ["text", "soft", "accent"]) {
-    const ink = resolveChain(hb[role], tone);
-    if (ink && !seen.has(ink)) { seen.add(ink); NORMAL_PAIRS.push([ink, hue, `hue ${n} --sec-${role}, tone=${tone}`]); }
+// THE MATRIX, AS A FUNCTION OF THE SKIN. Everything from here to its closing brace is the [2] that
+// ran once over the flat map; it now runs once for the base and once for each skin, with the
+// reporters passed in so a skin's lines can carry its name.
+function aaMatrix(T, TA, { ok, bad, soft, note }) {
+  const hexOf = (n) => "#" + [n.r, n.g, n.b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
+  function flattenOver(name, groundHex) {
+    const c = TA[name];
+    if (!c || !groundHex) return null;
+    let g = groundHex.replace("#", "");
+    if (g.length === 3) g = g.split("").map((x) => x + x).join("");
+    const gr = parseInt(g.slice(0, 2), 16), gg = parseInt(g.slice(2, 4), 16), gb = parseInt(g.slice(4, 6), 16);
+    return hexOf({ r: c.a * c.r + (1 - c.a) * gr, g: c.a * c.g + (1 - c.a) * gg, b: c.a * c.b + (1 - c.a) * gb });
   }
-  // (ii) the inks a TONE-KEYED selector puts there anyway, named by selector.
-  for (const k of TONE_KEYED) {
-    if (k.tone !== tone || seen.has(k.ink)) continue;
-    seen.add(k.ink);
-    NORMAL_PAIRS.push([k.ink, hue, `${k.selector} on hue ${n}`]);
-  }
-}
-// THE GROUND HALF OF row 046: `<Section hue>` IS NOT THE ONLY HUE CARRIER, and the ones it
-// misses carry HARDCODED inks. Everything above discovers grounds from `[data-hue="N"]`, which is
-// what `<Section hue>` renders. `<TierCard hue={N}>` renders `data-hue-bar={N}`, spine.css turns
-// that into `--tier-bar: var(--hue-N)`, and `.tier-card .tier-ico` paints `color: var(--on-dark)`
-// ON that background. So a real ink lands on a real hue ground through a path no [data-hue] block
-// and no [data-tone] selector appears in, and TONE_KEYED above cannot see it either, because the
-// selector is keyed on the GROUND rather than on the tone.
-//
-// THE THRESHOLD IS THE NORMAL-TEXT 4.5 AND NO NEW RULE IS ADDED HERE. A tier-ico ground carries an
-// ICON rather than body text, and WCAG puts non-text contrast at 3.0, so 4.5 is arguably strict
-// for it. Measured on zuidgeluid-site 2026-09-18, the three cells this finds are 1.72, 1.33 and
-// 2.06, which clear NEITHER threshold, so the threshold question does not decide any live cell and
-// a second threshold rule would be ceremony. It is raised in the PR that added this, not settled.
-//
-// A LIST A STRANGER CAN EXTEND, one line per carrier, each naming the component that renders the
-// attribute and the spine.css anchor that grounds it. `data-hue` is listed for completeness and
-// handled above, tone-aware, because its ink comes from the cascade rather than from a selector.
-// The sweep below this loop names any carrier the spine layer ships that is NOT in this list, so
-// the list decaying is a finding rather than a silence.
-//
-// `grounds` SAYS WHETHER THE ATTRIBUTE'S OWN BLOCK MAY GROUND WHAT CARRIES IT (R120). `data-hue`
-// does by design: it sets background, color and the --sec-* inks. A carrier declared
-// `grounds: false` sets an indirection property and nothing else, so a selector that reads the
-// property grounds its own box (scored above) and the element carrying the attribute keeps its
-// ground and its inks. That is a PROPERTY OF THE SPINE, and it is asserted below: a `grounds:
-// false` block that sets background, color or any --sec-* is a FAIL, because a wrapper using the
-// hue only as a band or tint would hand the hue's inks to its children.
-const HUE_CARRIERS = [
-  { attr: "data-hue",     handledAbove: true,  grounds: true,
-    source: "<Section hue> in src/components/spine/primitives.tsx -> [data-hue=\"N\"] in spine.css" },
-  { attr: "data-hue-bar", handledAbove: false, grounds: false,
-    source: "<TierCard hue> in src/components/spine/cards.tsx -> .tier-card[data-hue-bar=\"N\"] --tier-bar in spine.css" },
-  { attr: "data-hue-tint", handledAbove: false, grounds: false,
-    source: "any element's data-hue-tint=\"N\" (R120) -> [data-hue-tint=\"N\"] --hue-tint in spine.css" },
-];
-{
-  const css = stripComments(read(P.spineCss) || "");
-  // (i) which spine COMPONENTS render a hue carrier attribute, read from the spine layer rather
-  // than named here: a component renaming itself must not silently drop out of the scan.
-  const carrierTags = {};        // attr -> Set(componentName)
-  const shippedAttrs = new Set();
-  // A carrier need not have a component: data-hue-tint (R120) is CSS plus an attribute written in
-  // markup, by design. So the sweep in (iii) also reads every attribute selector spine.css keys on
-  // and every data-hue* attribute the content and route markup writes, or it is blind to exactly
-  // the kind of carrier R120 introduced.
-  for (const m of css.matchAll(/\[(data-hue[\w-]*)/g)) shippedAttrs.add(m[1]);
-  for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])])
-    for (const m of stripComments(read(f) || "").matchAll(/\b(data-hue[\w-]*)\s*=/g)) shippedAttrs.add(m[1]);
-  for (const f of walk(P.spineDir, [".tsx"])) {
-    const src = stripComments(read(f) || "");
-    for (const m of src.matchAll(/\bdata-hue[\w-]*\b/g)) shippedAttrs.add(m[0]);
-    const marks = [...src.matchAll(/export\s+(?:function|const)\s+([A-Z]\w*)/g)];
-    marks.forEach((m, i) => {
-      const body = src.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : src.length);
-      for (const a of body.matchAll(/\b(data-hue[\w-]*)\s*=/g)) {
-        (carrierTags[a[1]] ||= new Set()).add(m[1]);
-      }
-    });
-  }
-  // (ii) for each carrier that is not the [data-hue] cascade, learn the indirection property the
-  // attribute sets (--tier-bar), then score every selector that uses that property as a BACKGROUND
-  // and declares a colour. A selector with no colour (the 6px ::before rule) grounds no text and
-  // is not a pair.
-  const carrierPairs = [];
-  for (const c of HUE_CARRIERS) {
-    if (c.handledAbove) continue;
-    const tags = [...(carrierTags[c.attr] || [])];
-    const props = new Map();                 // hue number -> indirection property name
-    for (const m of css.matchAll(new RegExp("\\[" + c.attr + "=[\"']?(\\d+)[\"']?\\]\\s*\\{", "g"))) {
+  // Resolve one side of a pair to a hex the contrast maths can take. An opaque token answers
+  // as itself; a translucent one is flattened over the ground it is being checked against.
+  const resolveColour = (name, groundHex = null) =>
+    T[name] ?? (groundHex ? flattenOver(name, groundHex) : null);
+  // The set of tokens a pair referenced and this gate could NOT resolve, reported by name at
+  // the end of [2]. A skip nobody can see is the whole defect above.
+  const skippedTokens = new Set();
+  let flattenedPairs = 0;
+  // Normal body-text pairs -- must clear 4.5.
+  //
+  // GENERATED, NOT ENUMERATED (v0.13.9). This was a hardcoded list of 15 tone pairs while
+  // S2.3 said "the full matrix", and the gap between those two sentences shipped a live
+  // 1.55:1 on zuidgeluid.be. A Section sets `tone` and `hue` INDEPENDENTLY: the ground comes
+  // from the hue, the ink still comes from the tone. So `tone="slate" hue={3}` renders a
+  // dark-register ink on a light hue ground -- a pair that appeared in no list, because
+  // S2.3 owned text x tone, S4.6 owned hue x hue-ink, and neither owned the product.
+  // Enumerating cannot express a cross-product; discovering the declared hues can.
+  // DERIVED FROM spine.css's [data-tone=...] BLOCKS, not enumerated (site-contract 1.8.24,
+  // plan-site-1824-2026-08-27.md M3). The tone map is the thing that decides which ink lands
+  // on which ground, so it is the operand; a second copy of it here is a copy that decays.
+  // It already had: TONE_GROUNDS named `--slate`, which NO tokens.css declares (the map says
+  // `--dark-alt`), so the three slate pairs it listed were silently skipped by the `if (T[bg])`
+  // guard downstream and the checker reported OK on a matrix it was not checking.
+  //
+  // THE PARSER ANCHORS ON THE OPENING BRACE. Contract 1.8.23's E0 split every [data-tone]
+  // block across two lines, so a single-line pattern no longer matches: take everything from
+  // the brace to the closing brace and read the declarations out of that.
+  //
+  // THE ACCENT TONE IS DERIVED BUT EXCLUDED FROM THE 4.5 LIST, and that is not a scope
+  // judgement: S2.3/S4.3 make accent-as-background large-display-only, and the block further
+  // down already checks --on-dark on --accent at the 3.0 threshold. Including it here would
+  // assert 4.5 on a pair the standard puts at 3.0.
+  const TONE_BLOCKS = (() => {
+    const css = stripComments(read(P.spineCss) || "");
+    const out = {};
+    for (const m of css.matchAll(/\[data-tone=["']?(\w+)["']?\]\s*\{/g)) {
       const start = m.index + m[0].length;
       const end = css.indexOf("}", start);
       if (end < 0) continue;
-      const d = css.slice(start, end).match(/(--[\w-]+)\s*:\s*var\(\s*--hue-(\d+)/);
-      if (d && d[2] === m[1]) props.set(m[1], d[1]);
+      const body = css.slice(start, end);
+      const decl = (name) => {
+        const d = body.match(new RegExp("--" + name + "\\s*:\\s*var\\(\\s*(--[\\w-]+)"));
+        return d ? d[1] : null;
+      };
+      out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("tone-accent") };
     }
-    if (!props.size) { note(`hue carrier ${c.attr}: no [${c.attr}="N"] block in spine.css resolves to a --hue-N slot; nothing to score (${c.source})`); continue; }
-    // which N values the MARKUP actually composes through one of this carrier's components, or
-    // through the attribute written on an element directly (data-hue-tint has no component).
-    const used = new Set();
-    const rawRe = new RegExp("\\b" + c.attr + "\\s*=\\s*\\{?\\s*[\"'`]?(\\d+)", "g");
-    for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
-      const src = stripComments(read(f) || "");
-      for (const a of src.matchAll(rawRe)) used.add(a[1]);
-      if (!tags.length) continue;
-      const tagRe = new RegExp("<(" + tags.join("|") + ")\\b[\\s\\S]*?>", "g");
-      for (const tag of src.matchAll(tagRe)) {
-        const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
-        if (h) used.add(h[1]);
-      }
-    }
-    for (const n of [...used].sort()) {
-      const prop = props.get(n);
-      const hue = `--hue-${n}`;
-      if (!prop || (!T[hue] && !TA[hue])) continue;      // undeclared slot stays inert (S4.6)
-      composedHues.add(n);
-      for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-        const body = r[2];
-        if (!new RegExp("background(?:-color)?\\s*:\\s*var\\(\\s*" + prop + "\\b").test(body)) continue;
-        const ink = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
-        if (!ink) continue;                               // grounds no text: not a pair
-        carrierPairs.push([ink[1], hue, `${r[1].trim()} on ${c.attr}=${n} (${prop})`]);
-      }
-    }
-  }
-  for (const pr of carrierPairs) NORMAL_PAIRS.push(pr);
-  if (carrierPairs.length) note(`hue carriers beyond <Section hue>: ${carrierPairs.length} pair(s) added -- ` +
-    carrierPairs.map((x) => `${x[0]} on ${x[1]} via ${x[2]}`).join(" | "));
-  // (iii) the list decaying is a FINDING. Any data-hue* attribute the spine layer ships that no
-  // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
-  // carrier gets added instead of being missed.
-  const unlisted = [...shippedAttrs].filter((a) => !HUE_CARRIERS.some((c) => c.attr === a));
-  if (unlisted.length) note(`spine layer or markup carries hue carrier attribute(s) HUE_CARRIERS does not name: ` +
-    `${unlisted.join(", ")} -- any ink on those grounds is UNSCORED. Add a line to HUE_CARRIERS in this file`);
-  // (iv) A NON-GROUNDING CARRIER SETS NO GROUND AND NO INK (R120). Every block whose selector
-  // carries the attribute of a `grounds: false` carrier is read, valued ([attr="N"]) or BARE
-  // ([attr]), whatever selector it is compounded with, and any background, color or --sec-* it
-  // sets is named. Without this the declared way to borrow a hue as a band or tint is a comment,
-  // and one added line turns it back into the [data-hue] behaviour it replaces. The bare form is
-  // the likelier line, since one `[data-hue-tint] { ... }` grounds every slot at once.
-  const nonGrounding = HUE_CARRIERS.filter((c) => c.grounds === false);
-  const groundingHits = [];
-  let blocksRead = 0;
-  for (const c of nonGrounding) {
-    for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      if (!new RegExp("\\[" + c.attr + "(?![\\w-])").test(r[1])) continue;
-      blocksRead++;
-      const set = [...r[2].matchAll(/(?:^|[;\s])(background(?:-color)?|color|--sec-[\w-]+)\s*:/g)].map((m) => m[1]);
-      if (set.length) groundingHits.push(`${r[1].trim()} sets ${[...new Set(set)].join(", ")}`);
-    }
-  }
-  if (groundingHits.length) bad(`non-grounding hue carrier block(s) set a ground or an ink, so whatever carries the ` +
-    `attribute is grounded in the hue and hands its inks to its children (R120): ${groundingHits.join(" | ")}`);
-  else if (blocksRead) ok(`non-grounding hue carrier(s) ${nonGrounding.map((c) => c.attr).join(", ")} set no ground ` +
-    `and no ink (${blocksRead} block(s) read)`);
-  else note(`no block of a non-grounding hue carrier (${nonGrounding.map((c) => c.attr).join(", ")}) found in spine.css`);
-}
-if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
-// PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
-// register is uniformly unsafe over that palette (--accent-on-dark on --hue-2 = 1.00, the
-// same hex) rather than slot-specific, so a skin can ship five safe pairs and still have no
-// usable dark cell. That is worth SAYING and is not worth failing: nothing renders it, and
-// a checker that fires where there is no defect trains people to ignore it. ADVISORY.
-{
-  const declaredHues = [...new Set(Object.keys(HUE_BLOCKS))].filter((n) => T[`--hue-${n}`] || TA[`--hue-${n}`]);
-  const uncomposed = declaredHues.filter((n) => !composedHues.has(n));
-  const wouldFail = [];
-  for (const n of uncomposed) {
-    const hue = `--hue-${n}`;
-    const ground = T[hue];
-    if (!ground) continue;
-    for (const ink of [...new Set(TONE_KEYED.map((k) => k.ink))]) {
-      const fg = resolveColour(ink, ground);
-      if (!fg) continue;
-      const r = cr(fg, ground);
-      if (r < 4.5) wouldFail.push(`${ink} on ${hue} = ${r.toFixed(2)}`);
-    }
-  }
-  if (uncomposed.length) note(`declared but UNCOMPOSED hue slot(s) ${uncomposed.map((n) => `--hue-${n}`).join(", ")}: not asserted (nothing renders them). ` +
-    (wouldFail.length ? `Were a tone-keyed ink composed there it would fail: ${wouldFail.join(", ")}` : `every tone-keyed ink would clear 4.5 there`));
-}
+    return out;
+  })();
+  if (!Object.keys(TONE_BLOCKS).length) bad("tone map: no [data-tone] blocks parsed out of spine.css (the derivation below is empty)");
 
-// Accent-as-BACKGROUND text pair (on-dark body colour on the accent tone) --
-// large-display-only by S2.3/S4.3, so the threshold is 3.0 (NOT 4.5). On the accent
-// tone, accent text falls back to the on-dark BODY colour only (S4.3), so --on-dark is
-// the single exercised pair -- --on-dark-soft is "n/a" in the S2.3 matrix and must not
-// be force-checked. The canonical AS skin --on-dark on Ember = 3.81 clears 3.0 and
-// S2.3 sanctions it as large-only; checking it at 4.5 would false-fail the reference skin.
-const ACCENT_LARGE_PAIRS = [
-  ["--on-dark", "--accent"],
-];
-// THE CRUMB'S INKS ON EVERY GROUND A CRUMB SITS ON (R122). `.crumb a:hover` painted --accent, a
-// FILL token, as 12.5px weight-800 text, where 4.5 is owed: 3.81 on this seed's --bg. No pair
-// above could see it, because the tone map scores the tone's own roles and a state rule that
-// reads a raw token is not one of them. So each rule below has its `color` READ OUT OF spine.css
-// and RESOLVED the way the cascade resolves it, on every tone ground and on every composed hue
-// cell, and scored at the normal-text 4.5. A LIST A STRANGER CAN EXTEND: one line per selector
-// that paints text directly on the section's ground.
-//
-// THE ACCENT GROUND IS SCORED TOO, and the reason it once was not was one word carrying two facts.
-// S2.3/S4.3 put --accent AS INK at large display only, which is why ACCENT_LARGE_PAIRS above is
-// 3.0. On the accent GROUND the crumb's inks are --on-dark and --on-dark-soft, and a crumb is
-// 12.5px text, so 4.5 is owed there like any small text on that ground (the accentSmallText rule
-// below). The pairs are ASSERTED when the markup composes a <Crumb> inside an accent-tone Section,
-// read by that rule's own 600-character window. Where none is composed they are printed with their
-// ratios as an advisory line and never silently dropped, in the shape of the UNCOMPOSED hue-slot
-// line: nothing renders them, and a gate that fails where nothing renders trains people to ignore
-// it. On this seed's skin no token clears 4.5 on --accent, so a crumb cannot sit there at all.
-const SECTION_INK_RULES = [
-  { selector: ".crumb",         source: "<Crumb> in primitives.tsx, the trail itself" },
-  { selector: ".crumb a",       source: "a crumb link at rest (the hue-ink rule)" },
-  { selector: ".crumb a:hover", source: "a crumb link on hover (R122)" },
-];
-// Resolve one `color` expression to the skin token the browser paints: --sec-* through the hue
-// block's own chain on a hue ground and through the tone block otherwise (a tone block sets no
-// --sec-accent, so that name falls through to the next in the chain), --tone-* through the tone.
-function resolveInk(expr, tone, n) {
-  if (!expr) return null;
-  for (const m of expr.matchAll(/(--[\w-]+)/g)) {
-    const sec = m[1].match(/^--sec-(bg|text|soft|accent)$/);
-    if (sec) {
-      if (n && HUE_BLOCKS[n]) { const r = resolveChain(HUE_BLOCKS[n][sec[1]], tone); if (r) return r; continue; }
-      if (sec[1] === "accent") continue;
-      const v = (TONE_BLOCKS[tone] || {})[sec[1]];
-      if (v && (T[v] || TA[v])) return v;
-      continue;
-    }
-    const r = resolveChain(m[1], tone);
-    if (r) return r;
+  const ACCENT_TONE = "accent";   // checked at 3.0 by the accent-as-background block below
+  const TONE_GROUNDS = [...new Set(Object.values(TONE_BLOCKS).map((b) => b.bg).filter(Boolean))];
+  const TONE_INKS = Object.fromEntries(Object.entries(TONE_BLOCKS).map(
+    ([tone, b]) => [tone, [...new Set([b.text, b.soft, b.accent].filter(Boolean))]]));
+  const NORMAL_PAIRS = [];
+  for (const [tone, b] of Object.entries(TONE_BLOCKS)) {
+    if (tone === ACCENT_TONE || !b.bg) continue;
+    for (const ink of TONE_INKS[tone]) NORMAL_PAIRS.push([ink, b.bg]);
   }
-  return null;
-}
-{
-  const css = stripComments(read(P.spineCss) || "");
-  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
-  // a <Crumb> composed inside an accent-tone Section, by the accentSmallText window below
-  let accentCrumb = false;
+  note(`tone map derived from spine.css: ${Object.keys(TONE_BLOCKS).length} tone(s), ` +
+       `${TONE_GROUNDS.length} ground(s), ${NORMAL_PAIRS.length} base pair(s) ` +
+       `(${ACCENT_TONE} tone held for the 3.0 check)`);
+  // The tone x hue cells that ACTUALLY OCCUR, read from the markup -- not every arithmetic
+  // pair. A blind cross-product of six inks x five hues yields 19 "failures" on ZG where two
+  // are real, and a checker that fires where there is no defect trains people to ignore it,
+  // which lands in the same place as one that checks nothing. So: find every Section that
+  // sets BOTH tone and hue, and check exactly the inks that tone puts on that hue's ground.
+  // A site that never combines them generates zero extra pairs; an undeclared hue is inert.
+  const composed = new Set();
   for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
-    const body = stripComments(read(f) || "");
-    for (const m of body.matchAll(/tone=["']accent["']|data-tone=["']accent["']/g))
-      if (/<Crumb\b|className=["'][^"']*\bcrumb\b/.test(body.slice(m.index, m.index + 600))) accentCrumb = true;
-  }
-  const grounds = [];   // { tone, n, ground, held }
-  for (const [tone, b] of Object.entries(TONE_BLOCKS)) if (b.bg) grounds.push({ tone, n: null, ground: b.bg, held: tone === ACCENT_TONE && !accentCrumb });
-  for (const cell of [...composed].sort()) {
-    const [tone, n] = cell.split("|");
-    if ((T[`--hue-${n}`] || TA[`--hue-${n}`]) && HUE_BLOCKS[n]) grounds.push({ tone, n, ground: `--hue-${n}`, held: false });
-  }
-  // "ink|ground" -> cell -> selectors, so one pair painted by two rules is asserted once. A HELD
-  // ground (the accent ground with no crumb composed on it) collects into its own map.
-  const pairs = new Map();
-  const heldPairs = new Map();
-  const unread = [];
-  for (const r of SECTION_INK_RULES) {
-    // the LAST rule setting colour for the exact selector wins, as it does in the cascade
-    const hit = rules.filter((x) => x.sels.includes(r.selector) && /(?:^|[;\s])color\s*:/.test(x.body)).pop();
-    const expr = hit && (hit.body.match(/(?:^|[;\s])color\s*:\s*([^;]+)/) || [])[1];
-    if (!expr) { unread.push(r.selector); continue; }
-    for (const g of grounds) {
-      const ink = resolveInk(expr, g.tone, g.n);
-      if (!ink) continue;
-      const into = g.held ? heldPairs : pairs;
-      const key = `${ink}|${g.ground}`;
-      const cell = `tone=${g.tone}${g.n ? `, hue ${g.n} ground` : ""}`;
-      if (!into.has(key)) into.set(key, new Map());
-      if (!into.get(key).has(cell)) into.get(key).set(cell, []);
-      into.get(key).get(cell).push(r.selector);
+    const src = stripComments(read(f) || "");
+    for (const tag of src.matchAll(/<Section\b[^>]*>/g)) {
+      const t = tag[0].match(/tone\s*=\s*["'`](\w+)["'`]/);
+      const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
+      if (!h) continue;                       // no hue -- the tone matrix already covers it
+      const tone = t ? t[1] : "paper";        // no tone -- the default light register
+      composed.add(`${tone}|${h[1]}`);
     }
   }
-  // Worded apart from the TONE_KEYED label (`<selector> on hue N`), which fixtures.mjs forbids for
-  // a rule that reads --sec-*: a crumb rule here is SCORED, it is not reported as a divergence.
-  const label = (cells) => [...cells].map(([cell, sels]) => `crumb ink ${sels.join(" + ")}, ${cell}`).join("; ");
-  // A crumb pair can be one the tone map already asserts under its own label (the crumb's chain IS
-  // the tone's accent and soft ink on most grounds), so the count says how many are NEW pairs.
-  const already = new Set(NORMAL_PAIRS.map(([fg, bg]) => `${fg}|${bg}`));
-  let fresh = 0;
-  for (const [key, cells] of pairs) {
-    const [ink, ground] = key.split("|");
-    if (!already.has(key)) fresh++;
-    NORMAL_PAIRS.push([ink, ground, label(cells)]);
-  }
-  const heldLines = [];
-  for (const [key, cells] of heldPairs) {
-    const [ink, ground] = key.split("|");
-    const bgHex = T[ground];
-    const fgHex = bgHex && resolveColour(ink, bgHex);
-    if (!fgHex) continue;
-    const ratio = cr(fgHex, bgHex);
-    heldLines.push(`${ink} on ${ground} = ${ratio.toFixed(2)}${ratio < 4.5 ? " (< 4.5)" : ""} [${label(cells)}]`);
-  }
-  if (unread.length) soft(`crumb ink rule(s) not found in spine.css, so their inks are unscored: ${unread.join(", ")}`);
-  const heldGrounds = grounds.filter((g) => g.held).length;
-  note(`crumb inks: ${SECTION_INK_RULES.length} rule(s) x ${grounds.length - heldGrounds} ground(s) -> ${pairs.size} distinct pair(s) ` +
-       `added at 4.5 (${fresh} new to the matrix, ${pairs.size - fresh} already in it under another label)` +
-       (heldGrounds ? `; the ${ACCENT_TONE} ground is scored on the next line and not asserted` : ""));
-  if (heldLines.length) note(`crumb inks on the ${ACCENT_TONE} ground, NOT ASSERTED because no <Crumb> is composed in an ` +
-    `${ACCENT_TONE}-tone Section (a crumb is 12.5px text and owes 4.5 there the moment one is): ${heldLines.join(" | ")}`);
-  if (accentCrumb) note(`a <Crumb> is composed in an ${ACCENT_TONE}-tone Section, so its inks are asserted at 4.5 on the ${ACCENT_TONE} ground`);
-}
-
-// S4.6 SIX SLOTS IN EVERY HUE-KEYED FAMILY (R112). A site with six categories needs six slots, and
-// the spine had five, so sz-site reached its sixth tak through an inline var(--hue-6). The slot
-// count is ONE constant here, and every family spine.css keys on a hue number must carry all of
-// them: a family that stops at five is a site that cannot compose its sixth category in that form.
-// A LIST A STRANGER CAN EXTEND, one line per hue-keyed family. Standard S4.6 moves to six at the
-// Factory re-embed of this seed release; the seed leads by the brief's one-way order.
-const HUE_SLOTS = 6;
-const HUE_FAMILIES = [
-  { family: '[data-hue="N"]',      re: /\[data-hue=["']?(\d+)["']?\]/g,      source: "<Section hue>, the slot itself" },
-  { family: ".em-hue-N",           re: /\.em-hue-(\d+)\b/g,                  source: "<Em hue>, hue as text" },
-  { family: '[data-hue-bar="N"]',  re: /\[data-hue-bar=["']?(\d+)["']?\]/g,  source: "<TierCard hue>, the top bar" },
-  { family: '[data-hue-tint="N"]', re: /\[data-hue-tint=["']?(\d+)["']?\]/g, source: "a band or tint without grounding (R120)" },
-];
-{
-  const css = stripComments(read(P.spineCss) || "");
-  const short = [];
-  for (const f of HUE_FAMILIES) {
-    const have = new Set([...css.matchAll(f.re)].map((m) => +m[1]));
-    const missing = [];
-    for (let n = 1; n <= HUE_SLOTS; n++) if (!have.has(n)) missing.push(n);
-    if (missing.length) short.push(`${f.family} (${f.source}) lacks slot(s) ${missing.join(", ")}`);
-  }
-  if (short.length) bad(`spine.css does not carry all ${HUE_SLOTS} S4.6 hue slots in every hue-keyed family (R112): ${short.join(" | ")}`);
-  else ok(`spine.css carries all ${HUE_SLOTS} S4.6 hue slots in each of ${HUE_FAMILIES.length} hue-keyed families`);
-  // THE LIST DECAYING IS A FINDING HERE TOO, by the carrier sweep's rule above. Any family spine.css
-  // keys on a hue number, by attribute ([x-hue-y="N"]) or by class (.x-hue-N, which .em-hue-N proves
-  // exists), that no HUE_FAMILIES entry matches is a family whose slot count nothing checks.
-  const seen = new Map();   // family -> one selector that keys it
-  for (const m of css.matchAll(/\[([\w-]*hue[\w-]*)=["']?\d+["']?\]/g)) if (!seen.has(`[${m[1]}="N"]`)) seen.set(`[${m[1]}="N"]`, m[0]);
-  for (const m of css.matchAll(/\.((?:[\w-]*-)?hue)-\d+\b/g)) if (!seen.has(`.${m[1]}-N`)) seen.set(`.${m[1]}-N`, m[0]);
-  const unlisted = [...seen].filter(([, sel]) => !HUE_FAMILIES.some((f) => new RegExp(f.re.source).test(sel))).map(([fam]) => fam);
-  if (unlisted.length) note(`spine.css keys hue-numbered family(ies) HUE_FAMILIES does not name: ${unlisted.join(", ")} -- ` +
-    `their slot count is UNCHECKED (R112). Add a line to HUE_FAMILIES in this file`);
-}
-
-// S4.6 hue slots + hue-as-text (declared-only; undeclared tokens skip below): the
-// standard has ALWAYS said each declared --hue-N/--hue-N-ink pair is AA-gated, but no
-// pair was in the list until v1.8.2 -- the gate now matches the standard. --hue-N-text
-// (ruled in 2026-07-30) is checked as normal text on the three light grounds.
-for (let n = 1; n <= HUE_SLOTS; n++) {
-  NORMAL_PAIRS.push([`--hue-${n}-ink`, `--hue-${n}`]);
-  NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
-}
-let aaChecked = 0;
-let derivedPairs = NORMAL_PAIRS.length;
-// "fg|bg" of every pair ASSERTED, so the denominator can say how many are distinct: one pair is
-// asserted again under every label that reaches it (a crumb rule painting the tone's own ink).
-const assertedKeys = new Set();
-for (const [fg, bg, via] of NORMAL_PAIRS) {
-  // The GROUND must be opaque: a translucent ground composites over whatever sits behind
-  // the section, which this gate cannot see, so it is a NAMED skip rather than a guess.
-  const bgHex = T[bg];
-  if (!bgHex) { if (TA[bg]) skippedTokens.add(`${bg} (translucent GROUND -- what sits behind it is not knowable here)`); continue; }
-  const fgHex = resolveColour(fg, bgHex);
-  if (!fgHex) { if (!T[fg] && !TA[fg]) { /* undeclared: inert by S4.6, not a skip */ } else skippedTokens.add(fg); continue; }
-  const flat = !T[fg];
-  if (flat) flattenedPairs++;
-  aaChecked++;
-  assertedKeys.add(`${fg}|${bg}`);
-  const ratio = cr(fgHex, bgHex);
-  const label = `${fg} on ${bg}${flat ? ` (rgba flattened over the ground -> ${fgHex})` : ""}${via ? ` [${via}]` : ""}`;
-  if (ratio < 4.5) bad(`${label} = ${ratio.toFixed(2)} (< 4.5 normal)`);
-  else ok(`${label} = ${ratio.toFixed(2)}`);
-}
-// accentUses: does any accent-tone section carry small (non-display) text? If so the
-// large-only sanction does not apply and we DO require 4.5. Heuristic: a Section with
-// tone/data-tone="accent" that also renders Lead/body rather than only Display.
-const sectionFiles = [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])];
-let accentSmallText = false;
-for (const f of sectionFiles) {
-  const body = stripComments(read(f) || "");
-  const re = /tone=["']accent["']|data-tone=["']accent["']/g;
-  let m;
-  while ((m = re.exec(body))) {
-    const window = body.slice(m.index, m.index + 600);
-    if (/<Lead|<p[ >]|className=["'][^"']*\blead\b|<Body|<SecTitle/.test(window)) accentSmallText = true;
-  }
-}
-for (const [fg, bg] of ACCENT_LARGE_PAIRS) {
-  if (!T[fg] || !T[bg]) continue;
-  aaChecked++;
-  assertedKeys.add(`${fg}|${bg}`);
-  const ratio = cr(T[fg], T[bg]);
-  const threshold = accentSmallText ? 4.5 : 3.0;
-  if (ratio < threshold) bad(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (< ${threshold} ${accentSmallText ? "-- accent section carries small text" : "large"})`);
-  else ok(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (>= ${threshold}${accentSmallText ? "" : " large-only"})`);
-}
-if (accentSmallText) note("an accent-tone section appears to carry small text -- accent checked at 4.5, not the large-only 3.0");
-// NON-TEXT CONTRAST, 3.0: THE FORM FIELD EDGE (R121, WCAG 1.4.11). A field's 2px edge is the only
-// thing that shows where the control is, so it owes 3.0 against the FIELD it bounds and against
-// the CARD the field sits in. The spine drew it in --line, the rule-and-divider token, and nothing
-// scored it: 1.27 against the field and 1.38 against the card on this seed's skin, on every form.
-//
-// EVERY OPERAND IS READ OUT OF spine.css, NONE IS NAMED HERE: the edge token from the
-// `.form-card input` rule's border, the field ground from the same rule's background, the card
-// ground from `.form-card`'s background, and every `[data-card-ground]` override of --card-bg as a
-// further card ground. Each var() chain resolves to the first token the skin declares, as the
-// cascade does. A translucent edge is FLATTENED over the field's own ground before it is scored
-// against either side, because that is the pixel the browser paints: the field's background runs
-// under its border. The FOCUSED edge (the `:focus` rule's border token) is scored against the same
-// grounds, below.
-let nonTextChecked = 0;
-{
-  const css = stripComments(read(P.spineCss) || "");
-  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
-  const declOf = (body, prop) => (body.match(new RegExp("(?:^|[;\\s])" + prop + "\\s*:\\s*([^;]+)")) || [])[1] || null;
-  const fromVar = (v) => (v && v.includes("var(") ? v.slice(v.indexOf("var(")) : null);
-  // first opaque token the skin declares along a chain; a translucent GROUND is named, not guessed
-  const opaqueGround = (expr) => {
-    for (const m of (expr || "").matchAll(/(--[\w-]+)/g)) {
-      if (T[m[1]]) return m[1];
-      if (TA[m[1]]) { skippedTokens.add(`${m[1]} (translucent GROUND -- what sits behind it is not knowable here)`); return null; }
+  // THE HUE BLOCK, READ AS THE OPERAND IT IS (site-contract 1.8.24 M3's own lesson, applied
+  // one level down; backlog rows of 2026-08-27). M3 stopped ENUMERATING the pair list and
+  // derived it from the tone map. The loop that replaced it still derived the composed cell's
+  // INKS from the tone -- and on a hue ground the hue block has already REPLACED --sec-text,
+  // --sec-soft and --sec-accent. So the gate asserted tokens the browser does not paint
+  // there: measured 2026-08-27 on zuidgeluid-site with all five --hue-N-accent slots
+  // declared, `[2]` still reddened `--on-dark on --hue-3 = 2.06` (the TONE's main text token,
+  // which [data-hue] overrides) and exit 1 did not move. A red nobody can act on and a render
+  // nobody can trust are the same defect twice.
+  //
+  // So the inks for a composed cell are RESOLVED THROUGH THE HUE BLOCK'S OWN FALLBACK CHAIN
+  // against the skin, exactly as the cascade resolves them.
+  const HUE_BLOCKS = (() => {
+    const css = stripComments(read(P.spineCss) || "");
+    const out = {};
+    for (const m of css.matchAll(/\[data-hue=["']?(\d+)["']?\]\s*\{/g)) {
+      const start = m.index + m[0].length;
+      const end = css.indexOf("}", start);
+      if (end < 0) continue;
+      const body = css.slice(start, end);
+      const decl = (name) => {
+        const d = body.match(new RegExp("--" + name + "\\s*:\\s*([^;]+)"));
+        return d ? d[1] : null;
+      };
+      out[m[1]] = { bg: decl("sec-bg"), text: decl("sec-text"), soft: decl("sec-soft"), accent: decl("sec-accent") };
+    }
+    return out;
+  })();
+  // Walk a var(--a, var(--b, var(--c))) chain and return the FIRST name the skin actually
+  // declares, mapping --tone-* back through the tone map. Returns null when the whole chain
+  // is undeclared, which is the S4.6 "inert" case and stays inert.
+  function resolveChain(expr, tone) {
+    if (!expr) return null;
+    for (const m of expr.matchAll(/(--[\w-]+)/g)) {
+      let name = m[1];
+      const role = name.match(/^--tone-(bg|text|soft|accent)$/);
+      if (role) {
+        const b = TONE_BLOCKS[tone] || TONE_BLOCKS.paper;
+        name = b ? b[role[1] === "bg" ? "bg" : role[1]] : null;
+        if (!name) continue;
+      }
+      if (T[name] || TA[name]) return name;
     }
     return null;
-  };
-  const field = rules.filter((r) => r.sels.includes(".form-card input") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
-  const card = rules.filter((r) => r.sels.includes(".form-card") && declOf(r.body, "background(?:-color)?")).pop();
-  const edgeExpr = field && fromVar(declOf(field.body, "border(?:-color)?"));
-  const fieldExpr = field && fromVar(declOf(field.body, "background(?:-color)?"));
-  const cardExpr = card && fromVar(declOf(card.body, "background(?:-color)?"));
-  if (!edgeExpr || !fieldExpr || !cardExpr) {
-    soft(`cannot score the form field edge: spine.css has no ${!edgeExpr ? "`.form-card input` border token" : !fieldExpr ? "`.form-card input` background" : "`.form-card` background"} to read (WCAG 1.4.11 owes the edge 3.0)`);
-  } else {
-    const edge = (() => { for (const m of edgeExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
-    const fieldG = opaqueGround(fieldExpr);
-    const cardGs = [opaqueGround(cardExpr)];
-    if (/--card-bg\b/.test(cardExpr)) {
-      for (const r of rules) {
-        if (!r.sels.some((s) => /\[data-card-ground=/.test(s))) continue;
-        const v = fromVar(declOf(r.body, "--card-bg"));
-        const g = v && opaqueGround(v);
-        if (g) cardGs.push(g);
+  }
+  // SELECTORS WHOSE INK COMES FROM THE TONE REGARDLESS OF THE GROUND -- the other half of the
+  // same defect, and the half no instrument has ever held. A component that reads a token
+  // directly rather than --sec-* is INVISIBLE to a model that derives the ink from the tone,
+  // which is precisely what the client manifest recorded as `guard_is_partial` and what a
+  // controller re-derived from an attacker run four weeks later. The hue block re-grounds the
+  // section; it does not reach inside a selector keyed on [data-tone].
+  //
+  // So: scan spine.css for a rule whose selector carries [data-tone=X] AND a descendant, and
+  // whose `color` is a token that is NOT --sec-*. Each one is a real ink on the hue ground,
+  // named, and checked there. A selector already reading --sec-* follows the hue and is not
+  // a divergence -- which is why widening this set keeps it narrow.
+  const TONE_KEYED = [];   // { tone, selector, ink }
+  {
+    const css = stripComments(read(P.spineCss) || "");
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const body = m[2];
+      const c = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
+      if (!c || c[1].startsWith("--sec-")) continue;
+      for (const part of m[1].split(",")) {
+        const t = part.match(/\[data-tone=["']?(\w+)["']?\]\s*\S/);
+        if (t) TONE_KEYED.push({ tone: t[1], selector: part.trim(), ink: c[1] });
       }
     }
-    if (!edge || !fieldG) {
-      soft(`cannot score the form field edge: ${!edge ? `no token along ${edgeExpr.trim()} is declared` : `the field ground ${fieldExpr.trim()} does not resolve to an opaque token`}`);
-    } else {
-      const fieldHex = T[fieldG];
-      const sides = [["the field", fieldG], ...[...new Set(cardGs.filter(Boolean))].map((g) => ["the card", g])];
-      const scoreEdge = (what, tok) => {
-        const edgeHex = resolveColour(tok, fieldHex);
-        const flat = !T[tok];
-        const lbl = `${what} ${tok}${flat ? ` (rgba flattened over the field ${fieldG} -> ${edgeHex})` : ""}`;
-        for (const [side, g] of sides) {
-          nonTextChecked++;
-          const ratio = cr(edgeHex, T[g]);
-          if (ratio < 3.0) bad(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (< 3.0 non-text, WCAG 1.4.11)`);
-          else ok(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (>= 3.0 non-text)`);
-        }
-      };
-      scoreEdge("form field edge", edge);
-      // THE FOCUSED EDGE, against the same grounds. The rest rule sets `outline: none`, so the
-      // `:focus` border colour is the ONLY thing that shows which field has focus, and a re-skin
-      // edits only tokens.css: a paler accent loses WCAG 1.4.11 and the visible focus indicator
-      // together. Read out of spine.css the same way, from the rule naming `.form-card input:focus`.
-      const focus = rules.filter((r) => r.sels.includes(".form-card input:focus") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
-      const focusExpr = focus && fromVar(declOf(focus.body, "border(?:-color)?"));
-      const focusTok = focusExpr && (() => { for (const m of focusExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
-      if (!focusTok) soft(`cannot score the form field focus edge: spine.css has ${!focusExpr ? "no `.form-card input:focus` border token" : `no declared token along ${focusExpr.trim()}`} to read (it is the field's only focus indicator, and WCAG 1.4.11 owes it 3.0)`);
-      else scoreEdge("form field focus edge", focusTok);
+  }
+  if (TONE_KEYED.length) note(`selectors keying ink on the TONE rather than the ground (checked on every composed hue): ` +
+    TONE_KEYED.map((k) => `${k.selector} -> ${k.ink}`).join(" | "));
+
+  const composedHues = new Set();
+  // which route put each composed slot under something, for the denominator at the end of [2] (R063)
+  const groundRoutes = { section: new Set(), carrier: new Set(), component: new Set() };
+  for (const cell of [...composed].sort()) {
+    const [tone, n] = cell.split("|");
+    const hue = `--hue-${n}`;
+    if (!T[hue] && !TA[hue]) continue;        // undeclared slot is inert (S4.6)
+    composedHues.add(n);
+    const hb = HUE_BLOCKS[n];
+    if (!hb) { note(`hue ${n} is composed in the markup but spine.css declares no [data-hue="${n}"] block`); continue; }
+    groundRoutes.section.add(n);
+    // (i) the inks the HUE BLOCK renders, resolved through its own fallback chain.
+    const seen = new Set();
+    for (const role of ["text", "soft", "accent"]) {
+      const ink = resolveChain(hb[role], tone);
+      if (ink && !seen.has(ink)) { seen.add(ink); NORMAL_PAIRS.push([ink, hue, `hue ${n} --sec-${role}, tone=${tone}`]); }
+    }
+    // (ii) the inks a TONE-KEYED selector puts there anyway, named by selector.
+    for (const k of TONE_KEYED) {
+      if (k.tone !== tone || seen.has(k.ink)) continue;
+      seen.add(k.ink);
+      NORMAL_PAIRS.push([k.ink, hue, `${k.selector} on hue ${n}`]);
     }
   }
+  // THE GROUND HALF OF row 046: `<Section hue>` IS NOT THE ONLY HUE CARRIER, and the ones it
+  // misses carry HARDCODED inks. Everything above discovers grounds from `[data-hue="N"]`, which is
+  // what `<Section hue>` renders. `<TierCard hue={N}>` renders `data-hue-bar={N}`, spine.css turns
+  // that into `--tier-bar: var(--hue-N)`, and `.tier-card .tier-ico` paints `color: var(--on-dark)`
+  // ON that background. So a real ink lands on a real hue ground through a path no [data-hue] block
+  // and no [data-tone] selector appears in, and TONE_KEYED above cannot see it either, because the
+  // selector is keyed on the GROUND rather than on the tone.
+  //
+  // THE THRESHOLD IS THE NORMAL-TEXT 4.5 AND NO NEW RULE IS ADDED HERE. A tier-ico ground carries an
+  // ICON rather than body text, and WCAG puts non-text contrast at 3.0, so 4.5 is arguably strict
+  // for it. Measured on zuidgeluid-site 2026-09-18, the three cells this finds are 1.72, 1.33 and
+  // 2.06, which clear NEITHER threshold, so the threshold question does not decide any live cell and
+  // a second threshold rule would be ceremony. It is raised in the PR that added this, not settled.
+  //
+  // A LIST A STRANGER CAN EXTEND, one line per carrier, each naming the component that renders the
+  // attribute and the spine.css anchor that grounds it. `data-hue` is listed for completeness and
+  // handled above, tone-aware, because its ink comes from the cascade rather than from a selector.
+  // The sweep below this loop names any carrier the spine layer ships that is NOT in this list, so
+  // the list decaying is a finding rather than a silence.
+  //
+  // `grounds` SAYS WHETHER THE ATTRIBUTE'S OWN BLOCK MAY GROUND WHAT CARRIES IT (R120). `data-hue`
+  // does by design: it sets background, color and the --sec-* inks. A carrier declared
+  // `grounds: false` sets an indirection property and nothing else, so a selector that reads the
+  // property grounds its own box (scored above) and the element carrying the attribute keeps its
+  // ground and its inks. That is a PROPERTY OF THE SPINE, and it is asserted below: a `grounds:
+  // false` block that sets background, color or any --sec-* is a FAIL, because a wrapper using the
+  // hue only as a band or tint would hand the hue's inks to its children.
+  const HUE_CARRIERS = [
+    { attr: "data-hue",     handledAbove: true,  grounds: true,
+      source: "<Section hue> in src/components/spine/primitives.tsx -> [data-hue=\"N\"] in spine.css" },
+    { attr: "data-hue-bar", handledAbove: false, grounds: false,
+      source: "<TierCard hue> in src/components/spine/cards.tsx -> .tier-card[data-hue-bar=\"N\"] --tier-bar in spine.css" },
+    { attr: "data-hue-tint", handledAbove: false, grounds: false,
+      source: "any element's data-hue-tint=\"N\" (R120) -> [data-hue-tint=\"N\"] --hue-tint in spine.css" },
+  ];
+  {
+    const css = stripComments(read(P.spineCss) || "");
+    // (i) which spine COMPONENTS render a hue carrier attribute, read from the spine layer rather
+    // than named here: a component renaming itself must not silently drop out of the scan.
+    const carrierTags = {};        // attr -> Set(componentName)
+    const shippedAttrs = new Set();
+    // A carrier need not have a component: data-hue-tint (R120) is CSS plus an attribute written in
+    // markup, by design. So the sweep in (iii) also reads every attribute selector spine.css keys on
+    // and every data-hue* attribute the content and route markup writes, or it is blind to exactly
+    // the kind of carrier R120 introduced.
+    for (const m of css.matchAll(/\[(data-hue[\w-]*)/g)) shippedAttrs.add(m[1]);
+    for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])])
+      for (const m of stripComments(read(f) || "").matchAll(/\b(data-hue[\w-]*)\s*=/g)) shippedAttrs.add(m[1]);
+    for (const f of walk(P.spineDir, [".tsx"])) {
+      const src = stripComments(read(f) || "");
+      for (const m of src.matchAll(/\bdata-hue[\w-]*\b/g)) shippedAttrs.add(m[0]);
+      const marks = [...src.matchAll(/export\s+(?:function|const)\s+([A-Z]\w*)/g)];
+      marks.forEach((m, i) => {
+        const body = src.slice(m.index, i + 1 < marks.length ? marks[i + 1].index : src.length);
+        for (const a of body.matchAll(/\b(data-hue[\w-]*)\s*=/g)) {
+          (carrierTags[a[1]] ||= new Set()).add(m[1]);
+        }
+      });
+    }
+    // (ii) for each carrier that is not the [data-hue] cascade, learn the indirection property the
+    // attribute sets (--tier-bar), then score every selector that uses that property as a BACKGROUND
+    // and declares a colour. A selector with no colour (the 6px ::before rule) grounds no text and
+    // is not a pair.
+    const carrierPairs = [];
+    for (const c of HUE_CARRIERS) {
+      if (c.handledAbove) continue;
+      const tags = [...(carrierTags[c.attr] || [])];
+      const props = new Map();                 // hue number -> indirection property name
+      for (const m of css.matchAll(new RegExp("\\[" + c.attr + "=[\"']?(\\d+)[\"']?\\]\\s*\\{", "g"))) {
+        const start = m.index + m[0].length;
+        const end = css.indexOf("}", start);
+        if (end < 0) continue;
+        const d = css.slice(start, end).match(/(--[\w-]+)\s*:\s*var\(\s*--hue-(\d+)/);
+        if (d && d[2] === m[1]) props.set(m[1], d[1]);
+      }
+      if (!props.size) { note(`hue carrier ${c.attr}: no [${c.attr}="N"] block in spine.css resolves to a --hue-N slot; nothing to score (${c.source})`); continue; }
+      // which N values the MARKUP actually composes through one of this carrier's components, or
+      // through the attribute written on an element directly (data-hue-tint has no component).
+      const used = new Set();
+      const rawRe = new RegExp("\\b" + c.attr + "\\s*=\\s*\\{?\\s*[\"'`]?(\\d+)", "g");
+      for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+        const src = stripComments(read(f) || "");
+        for (const a of src.matchAll(rawRe)) used.add(a[1]);
+        if (!tags.length) continue;
+        const tagRe = new RegExp("<(" + tags.join("|") + ")\\b[\\s\\S]*?>", "g");
+        for (const tag of src.matchAll(tagRe)) {
+          const h = tag[0].match(/hue\s*=\s*\{?\s*["'`]?(\d+)/);
+          if (h) used.add(h[1]);
+        }
+      }
+      for (const n of [...used].sort()) {
+        const prop = props.get(n);
+        const hue = `--hue-${n}`;
+        if (!prop || (!T[hue] && !TA[hue])) continue;      // undeclared slot stays inert (S4.6)
+        composedHues.add(n);
+        groundRoutes.carrier.add(n);
+        for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+          const body = r[2];
+          if (!new RegExp("background(?:-color)?\\s*:\\s*var\\(\\s*" + prop + "\\b").test(body)) continue;
+          const ink = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
+          if (!ink) continue;                               // grounds no text: not a pair
+          carrierPairs.push([ink[1], hue, `${r[1].trim()} on ${c.attr}=${n} (${prop})`]);
+        }
+      }
+    }
+    for (const pr of carrierPairs) NORMAL_PAIRS.push(pr);
+    if (carrierPairs.length) note(`hue carriers beyond <Section hue>: ${carrierPairs.length} pair(s) added -- ` +
+      carrierPairs.map((x) => `${x[0]} on ${x[1]} via ${x[2]}`).join(" | "));
+    // (iii) the list decaying is a FINDING. Any data-hue* attribute the spine layer ships that no
+    // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
+    // carrier gets added instead of being missed.
+    const unlisted = [...shippedAttrs].filter((a) => !HUE_CARRIERS.some((c) => c.attr === a));
+    if (unlisted.length) note(`spine layer or markup carries hue carrier attribute(s) HUE_CARRIERS does not name: ` +
+      `${unlisted.join(", ")} -- any ink on those grounds is UNSCORED. Add a line to HUE_CARRIERS in this file`);
+    // (iv) A NON-GROUNDING CARRIER SETS NO GROUND AND NO INK (R120). Every block whose selector
+    // carries the attribute of a `grounds: false` carrier is read, valued ([attr="N"]) or BARE
+    // ([attr]), whatever selector it is compounded with, and any background, color or --sec-* it
+    // sets is named. Without this the declared way to borrow a hue as a band or tint is a comment,
+    // and one added line turns it back into the [data-hue] behaviour it replaces. The bare form is
+    // the likelier line, since one `[data-hue-tint] { ... }` grounds every slot at once.
+    const nonGrounding = HUE_CARRIERS.filter((c) => c.grounds === false);
+    const groundingHits = [];
+    let blocksRead = 0;
+    for (const c of nonGrounding) {
+      for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!new RegExp("\\[" + c.attr + "(?![\\w-])").test(r[1])) continue;
+        blocksRead++;
+        const set = [...r[2].matchAll(/(?:^|[;\s])(background(?:-color)?|color|--sec-[\w-]+)\s*:/g)].map((m) => m[1]);
+        if (set.length) groundingHits.push(`${r[1].trim()} sets ${[...new Set(set)].join(", ")}`);
+      }
+    }
+    if (groundingHits.length) bad(`non-grounding hue carrier block(s) set a ground or an ink, so whatever carries the ` +
+      `attribute is grounded in the hue and hands its inks to its children (R120): ${groundingHits.join(" | ")}`);
+    else if (blocksRead) ok(`non-grounding hue carrier(s) ${nonGrounding.map((c) => c.attr).join(", ")} set no ground ` +
+      `and no ink (${blocksRead} block(s) read)`);
+    else note(`no block of a non-grounding hue carrier (${nonGrounding.map((c) => c.attr).join(", ")}) found in spine.css`);
+  }
+  // THE REST OF R063: A HUE COMPOSED AS A GROUND THROUGH A COMPONENT'S PROP OR AN INLINE STYLE. The
+  // carriers above are SPINE attributes, and a site composes hue grounds the spine never declared:
+  // zuidgeluid-site's `<IlluStage sheet="var(--hue-3)">` (its own src/content/ui.tsx) writes the prop
+  // as a `background`, so a slot is a ground there that no [data-hue] block, carrier or tone selector
+  // names, and every ink on it sat outside the denominator. So the resolver reads every component
+  // under src/ whose body writes a destructured prop as its `background`, and every opening tag in
+  // the content and route markup that passes such a prop, or carries an inline `background`, whose
+  // value is a `var(--hue-N)`.
+  //
+  // WHAT LANDS ON THE GROUND IS SCORED, AND WHAT IS NOT IS COUNTED. A `color: "var(--x)"` the
+  // component's body or the tag's own style declares is an ink there. Literal text between the
+  // opening and the closing tag, where neither declares a colour, inherits the enclosing Section's
+  // ink, resolved as the cascade resolves --sec-text there. A value that is not one flat slot (a
+  // gradient, a color-mix) has no single colour to score and is NAMED, as a translucent ground is
+  // below. An svg fill or stroke is not text and is not scored, and text a component renders from its
+  // own props is not visible to this reading of the markup; the last clause of the line below counts
+  // every `var(--hue-N)` in the markup the resolver did not place as a ground, so that limit is a
+  // number on the page rather than a silence.
+  {
+    const markupFiles = [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])];
+    const slotRef = /var\(\s*--hue-\d+\s*[,)]/g;
+    // (i) the components that write a prop as their background, wherever under src/ they are defined
+    const grounders = new Map();   // name -> { file, props, inks }
+    for (const f of walk(join(ROOT, "src"), [".tsx"])) {
+      const src = stripComments(read(f) || "");
+      const defs = [...src.matchAll(/\b(?:function\s+([A-Z]\w*)\s*\(|const\s+([A-Z]\w*)\s*=\s*\()\s*\{([^{}]*)\}/g)];
+      defs.forEach((m, i) => {
+        const body = src.slice(m.index, i + 1 < defs.length ? defs[i + 1].index : src.length);
+        const props = m[3].split(",").map((p) => p.trim().split(/[\s=:]/)[0])
+          .filter((p) => /^[A-Za-z_]\w*$/.test(p) && new RegExp("\\bbackground(?:Color)?\\s*:\\s*" + p + "\\b").test(body));
+        if (props.length) grounders.set(m[1] || m[2], { file: relative(ROOT, f).replace(/\\/g, "/"), props,
+          inks: [...new Set([...body.matchAll(/(?<![\w-])color\s*:\s*["'`]\s*var\(\s*(--[\w-]+)/g)].map((x) => x[1]))] });
+      });
+    }
+    // (ii) an opening tag read to its closing `>` across quotes and braces, so an attribute holding
+    // `=>` or a nested element does not end it early
+    const openTag = (src, at) => {
+      let depth = 0, q = null;
+      for (let i = at + 1; i < src.length; i++) {
+        const c = src[i];
+        if (q) { if (c === q) q = null; continue; }
+        if (c === '"' || c === "'" || c === "`") q = c;
+        else if (c === "{") depth++;
+        else if (c === "}") depth--;
+        else if (c === ">" && !depth) return { text: src.slice(at, i + 1), end: i + 1, selfClosing: src[i - 1] === "/" };
+      }
+      return null;
+    };
+    // the literal text of a JSX fragment: every tag and every {expression} dropped, each read to its
+    // own end so an arrow function in an attribute does not leave its body behind as "text"
+    const textOf = (s) => {
+      let txt = "", i = 0;
+      while (i < s.length) {
+        if (s[i] === "<" && /[A-Za-z/]/.test(s[i + 1] || "")) {
+          const end = s[i + 1] === "/" ? s.indexOf(">", i) + 1 : (openTag(s, i) || { end: 0 }).end;
+          if (!end) break;
+          i = end; txt += " "; continue;
+        }
+        if (s[i] === "{") {
+          let d = 1, j = i + 1;
+          for (; j < s.length && d; j++) { if (s[j] === "{") d++; else if (s[j] === "}") d--; }
+          i = j; txt += " "; continue;
+        }
+        txt += s[i++];
+      }
+      return txt;
+    };
+    // the tone and hue of the innermost <Section> open at a position, which is what text there inherits
+    const enclosing = (src, at) => {
+      const stack = [];
+      for (const m of src.slice(0, at).matchAll(/<Section\b|<\/Section\s*>/g)) {
+        if (m[0].startsWith("</")) { stack.pop(); continue; }
+        const t = openTag(src, m.index);
+        if (t && !t.selfClosing) stack.push(t.text);
+      }
+      const top = stack[stack.length - 1] || "";
+      return { tone: (top.match(/\btone\s*=\s*["'`](\w+)["'`]/) || [])[1] || "paper",
+               hue: (top.match(/(?<![\w-])hue\s*=\s*\{?\s*["'`]?(\d+)/) || [])[1] || null };
+    };
+    const flat = (v) => /^\s*var\(\s*--hue-\d+\s*[,)]/.test(v) && (v.match(slotRef) || []).length === 1 && !/gradient|color-mix|url\(/i.test(v);
+    const pairs = new Map();       // "ink|hue|route" -> { ink, hue, label, files }
+    const nonFlat = [], viaBySlot = new Map(), placed = new Map();
+    let refs = 0;
+    for (const f of markupFiles) {
+      const src = stripComments(read(f) || "");
+      const rel = relative(ROOT, f).replace(/\\/g, "/");
+      refs += (src.match(slotRef) || []).length;
+      for (const m of src.matchAll(/(?<![\w)\]])<([A-Za-z][\w.]*)/g)) {   // not a generic or a comparison
+        const t = openTag(src, m.index);
+        if (!t) continue;
+        const name = m[1], g = grounders.get(name), values = [];   // [route, value, inks]
+        if (g) for (const p of g.props) {
+          const v = t.text.match(new RegExp("\\s" + p + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|\\{\\s*[\"'`]([^\"'`]*)[\"'`]\\s*\\})"));
+          if (v) values.push([`<${name} ${p}> (${g.file})`, v[1] ?? v[2] ?? v[3], g.inks]);
+        }
+        const style = t.text.match(/\bstyle\s*=\s*\{\{([\s\S]*)\}\}/);
+        const bg = style && style[1].match(/\bbackground(?:Color)?\s*:\s*["'`]([^"'`]*)["'`]/);
+        if (bg) {
+          const ink = style[1].match(/(?<![\w-])color\s*:\s*["'`]\s*var\(\s*(--[\w-]+)/);
+          values.push([`an inline style background on <${name}>`, bg[1], ink ? [ink[1]] : []]);
+        }
+        for (const [route, v, inks] of values) {
+          const n = (v.match(slotRef) || []).length;
+          if (!n) continue;
+          placed.set(rel, (placed.get(rel) || 0) + n);
+          if (!flat(v)) { nonFlat.push(`${route} in ${rel}: ${v.trim()}`); continue; }
+          const slot = v.match(/--hue-(\d+)/)[1], hue = `--hue-${slot}`;
+          if (!T[hue] && !TA[hue]) continue;          // undeclared slot stays inert (S4.6)
+          composedHues.add(slot);
+          groundRoutes.component.add(slot);
+          if (!viaBySlot.has(slot)) viaBySlot.set(slot, new Set());
+          viaBySlot.get(slot).add(route);
+          const lands = inks.map((ink) => [ink, `the colour ${route} declares, on hue ${slot}`]);
+          if (!inks.length && !t.selfClosing) {
+            const close = src.indexOf(`</${name}>`, t.end);
+            if (close >= 0 && /[A-Za-z0-9]/.test(textOf(src.slice(t.end, close)))) {
+              const e = enclosing(src, m.index);
+              const ink = resolveInk("var(--sec-text)", e.tone, e.hue);
+              if (ink) lands.push([ink, `text inside ${route} inherits the section ink, tone=${e.tone}${e.hue ? `, hue ${e.hue}` : ""}, on hue ${slot}`]);
+            }
+          }
+          for (const [ink, label] of lands) {
+            const key = `${ink}|${hue}|${label}`;
+            if (!pairs.has(key)) pairs.set(key, { ink, hue, label, files: new Set() });
+            pairs.get(key).files.add(rel);
+          }
+        }
+      }
+    }
+    for (const p of pairs.values()) NORMAL_PAIRS.push([p.ink, p.hue, `${p.label}, in ${[...p.files].join(", ")}`]);
+    const unplaced = markupFiles.map((f) => relative(ROOT, f).replace(/\\/g, "/"))
+      .map((rel) => [rel, (stripComments(read(join(ROOT, rel)) || "").match(slotRef) || []).length - (placed.get(rel) || 0)])
+      .filter(([, k]) => k > 0);
+    const left = unplaced.reduce((a, [, k]) => a + k, 0);
+    if (refs || grounders.size) note(`hue grounds through a component prop or an inline style (R063): ` +
+      `${viaBySlot.size} slot(s) composed${viaBySlot.size ? ` (${[...viaBySlot].map(([n, v]) => `--hue-${n} via ${[...v].join(" and ")}`).join("; ")})` : ""}, ` +
+      `${pairs.size} pair(s) added, ${nonFlat.length} ground(s) that are not one flat slot named and not scored` +
+      `${nonFlat.length ? ` (${nonFlat.join(" | ")})` : ""}; ${refs - left} of ${refs} var(--hue-N) reference(s) in the ` +
+      `content and route markup placed as a ground` + (left ? `, the other ${left} a fill, a stroke, a border or an ink, or ` +
+      `routed through data this reading does not follow: ${unplaced.map(([r, k]) => `${r} (${k})`).join(", ")}` : ""));
+  }
+  if (composed.size) note(`tone x hue compositions found in markup: ${[...composed].sort().join(", ")} -- ${composed.size} cell(s) added to the matrix`);
+  // PALETTE-LEVEL LINE for slots DECLARED but never composed. ZG's numbers show the dark
+  // register is uniformly unsafe over that palette (--accent-on-dark on --hue-2 = 1.00, the
+  // same hex) rather than slot-specific, so a skin can ship five safe pairs and still have no
+  // usable dark cell. That is worth SAYING and is not worth failing: nothing renders it, and
+  // a checker that fires where there is no defect trains people to ignore it. ADVISORY.
+  {
+    const declaredHues = [...new Set(Object.keys(HUE_BLOCKS))].filter((n) => T[`--hue-${n}`] || TA[`--hue-${n}`]);
+    const uncomposed = declaredHues.filter((n) => !composedHues.has(n));
+    const wouldFail = [];
+    for (const n of uncomposed) {
+      const hue = `--hue-${n}`;
+      const ground = T[hue];
+      if (!ground) continue;
+      for (const ink of [...new Set(TONE_KEYED.map((k) => k.ink))]) {
+        const fg = resolveColour(ink, ground);
+        if (!fg) continue;
+        const r = cr(fg, ground);
+        if (r < 4.5) wouldFail.push(`${ink} on ${hue} = ${r.toFixed(2)}`);
+      }
+    }
+    if (uncomposed.length) note(`declared but UNCOMPOSED hue slot(s) ${uncomposed.map((n) => `--hue-${n}`).join(", ")}: not asserted (nothing renders them). ` +
+      (wouldFail.length ? `Were a tone-keyed ink composed there it would fail: ${wouldFail.join(", ")}` : `every tone-keyed ink would clear 4.5 there`));
+  }
+
+  // Accent-as-BACKGROUND text pair (on-dark body colour on the accent tone) --
+  // large-display-only by S2.3/S4.3, so the threshold is 3.0 (NOT 4.5). On the accent
+  // tone, accent text falls back to the on-dark BODY colour only (S4.3), so --on-dark is
+  // the single exercised pair -- --on-dark-soft is "n/a" in the S2.3 matrix and must not
+  // be force-checked. The canonical AS skin --on-dark on Ember = 3.81 clears 3.0 and
+  // S2.3 sanctions it as large-only; checking it at 4.5 would false-fail the reference skin.
+  const ACCENT_LARGE_PAIRS = [
+    ["--on-dark", "--accent"],
+  ];
+  // THE CRUMB'S INKS ON EVERY GROUND A CRUMB SITS ON (R122). `.crumb a:hover` painted --accent, a
+  // FILL token, as 12.5px weight-800 text, where 4.5 is owed: 3.81 on this seed's --bg. No pair
+  // above could see it, because the tone map scores the tone's own roles and a state rule that
+  // reads a raw token is not one of them. So each rule below has its `color` READ OUT OF spine.css
+  // and RESOLVED the way the cascade resolves it, on every tone ground and on every composed hue
+  // cell, and scored at the normal-text 4.5. A LIST A STRANGER CAN EXTEND: one line per selector
+  // that paints text directly on the section's ground.
+  //
+  // THE ACCENT GROUND IS SCORED TOO, and the reason it once was not was one word carrying two facts.
+  // S2.3/S4.3 put --accent AS INK at large display only, which is why ACCENT_LARGE_PAIRS above is
+  // 3.0. On the accent GROUND the crumb's inks are --on-dark and --on-dark-soft, and a crumb is
+  // 12.5px text, so 4.5 is owed there like any small text on that ground (the accentSmallText rule
+  // below). The pairs are ASSERTED when the markup composes a <Crumb> inside an accent-tone Section,
+  // read by that rule's own 600-character window. Where none is composed they are printed with their
+  // ratios as an advisory line and never silently dropped, in the shape of the UNCOMPOSED hue-slot
+  // line: nothing renders them, and a gate that fails where nothing renders trains people to ignore
+  // it. On this seed's skin no token clears 4.5 on --accent, so a crumb cannot sit there at all.
+  const SECTION_INK_RULES = [
+    { selector: ".crumb",         source: "<Crumb> in primitives.tsx, the trail itself" },
+    { selector: ".crumb a",       source: "a crumb link at rest (the hue-ink rule)" },
+    { selector: ".crumb a:hover", source: "a crumb link on hover (R122)" },
+  ];
+  // Resolve one `color` expression to the skin token the browser paints: --sec-* through the hue
+  // block's own chain on a hue ground and through the tone block otherwise (a tone block sets no
+  // --sec-accent, so that name falls through to the next in the chain), --tone-* through the tone.
+  function resolveInk(expr, tone, n) {
+    if (!expr) return null;
+    for (const m of expr.matchAll(/(--[\w-]+)/g)) {
+      const sec = m[1].match(/^--sec-(bg|text|soft|accent)$/);
+      if (sec) {
+        if (n && HUE_BLOCKS[n]) { const r = resolveChain(HUE_BLOCKS[n][sec[1]], tone); if (r) return r; continue; }
+        if (sec[1] === "accent") continue;
+        const v = (TONE_BLOCKS[tone] || {})[sec[1]];
+        if (v && (T[v] || TA[v])) return v;
+        continue;
+      }
+      const r = resolveChain(m[1], tone);
+      if (r) return r;
+    }
+    return null;
+  }
+  {
+    const css = stripComments(read(P.spineCss) || "");
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
+    // a <Crumb> composed inside an accent-tone Section, by the accentSmallText window below
+    let accentCrumb = false;
+    for (const f of [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])]) {
+      const body = stripComments(read(f) || "");
+      for (const m of body.matchAll(/tone=["']accent["']|data-tone=["']accent["']/g))
+        if (/<Crumb\b|className=["'][^"']*\bcrumb\b/.test(body.slice(m.index, m.index + 600))) accentCrumb = true;
+    }
+    const grounds = [];   // { tone, n, ground, held }
+    for (const [tone, b] of Object.entries(TONE_BLOCKS)) if (b.bg) grounds.push({ tone, n: null, ground: b.bg, held: tone === ACCENT_TONE && !accentCrumb });
+    for (const cell of [...composed].sort()) {
+      const [tone, n] = cell.split("|");
+      if ((T[`--hue-${n}`] || TA[`--hue-${n}`]) && HUE_BLOCKS[n]) grounds.push({ tone, n, ground: `--hue-${n}`, held: false });
+    }
+    // "ink|ground" -> cell -> selectors, so one pair painted by two rules is asserted once. A HELD
+    // ground (the accent ground with no crumb composed on it) collects into its own map.
+    const pairs = new Map();
+    const heldPairs = new Map();
+    const unread = [];
+    for (const r of SECTION_INK_RULES) {
+      // the LAST rule setting colour for the exact selector wins, as it does in the cascade
+      const hit = rules.filter((x) => x.sels.includes(r.selector) && /(?:^|[;\s])color\s*:/.test(x.body)).pop();
+      const expr = hit && (hit.body.match(/(?:^|[;\s])color\s*:\s*([^;]+)/) || [])[1];
+      if (!expr) { unread.push(r.selector); continue; }
+      for (const g of grounds) {
+        const ink = resolveInk(expr, g.tone, g.n);
+        if (!ink) continue;
+        const into = g.held ? heldPairs : pairs;
+        const key = `${ink}|${g.ground}`;
+        const cell = `tone=${g.tone}${g.n ? `, hue ${g.n} ground` : ""}`;
+        if (!into.has(key)) into.set(key, new Map());
+        if (!into.get(key).has(cell)) into.get(key).set(cell, []);
+        into.get(key).get(cell).push(r.selector);
+      }
+    }
+    // Worded apart from the TONE_KEYED label (`<selector> on hue N`), which fixtures.mjs forbids for
+    // a rule that reads --sec-*: a crumb rule here is SCORED, it is not reported as a divergence.
+    const label = (cells) => [...cells].map(([cell, sels]) => `crumb ink ${sels.join(" + ")}, ${cell}`).join("; ");
+    // A crumb pair can be one the tone map already asserts under its own label (the crumb's chain IS
+    // the tone's accent and soft ink on most grounds), so the count says how many are NEW pairs.
+    const already = new Set(NORMAL_PAIRS.map(([fg, bg]) => `${fg}|${bg}`));
+    let fresh = 0;
+    for (const [key, cells] of pairs) {
+      const [ink, ground] = key.split("|");
+      if (!already.has(key)) fresh++;
+      NORMAL_PAIRS.push([ink, ground, label(cells)]);
+    }
+    const heldLines = [];
+    for (const [key, cells] of heldPairs) {
+      const [ink, ground] = key.split("|");
+      const bgHex = T[ground];
+      const fgHex = bgHex && resolveColour(ink, bgHex);
+      if (!fgHex) continue;
+      const ratio = cr(fgHex, bgHex);
+      heldLines.push(`${ink} on ${ground} = ${ratio.toFixed(2)}${ratio < 4.5 ? " (< 4.5)" : ""} [${label(cells)}]`);
+    }
+    if (unread.length) soft(`crumb ink rule(s) not found in spine.css, so their inks are unscored: ${unread.join(", ")}`);
+    const heldGrounds = grounds.filter((g) => g.held).length;
+    note(`crumb inks: ${SECTION_INK_RULES.length} rule(s) x ${grounds.length - heldGrounds} ground(s) -> ${pairs.size} distinct pair(s) ` +
+         `added at 4.5 (${fresh} new to the matrix, ${pairs.size - fresh} already in it under another label)` +
+         (heldGrounds ? `; the ${ACCENT_TONE} ground is scored on the next line and not asserted` : ""));
+    if (heldLines.length) note(`crumb inks on the ${ACCENT_TONE} ground, NOT ASSERTED because no <Crumb> is composed in an ` +
+      `${ACCENT_TONE}-tone Section (a crumb is 12.5px text and owes 4.5 there the moment one is): ${heldLines.join(" | ")}`);
+    if (accentCrumb) note(`a <Crumb> is composed in an ${ACCENT_TONE}-tone Section, so its inks are asserted at 4.5 on the ${ACCENT_TONE} ground`);
+  }
+
+  // S4.6 SIX SLOTS IN EVERY HUE-KEYED FAMILY (R112). A site with six categories needs six slots, and
+  // the spine had five, so sz-site reached its sixth tak through an inline var(--hue-6). The slot
+  // count is ONE constant here, and every family spine.css keys on a hue number must carry all of
+  // them: a family that stops at five is a site that cannot compose its sixth category in that form.
+  // A LIST A STRANGER CAN EXTEND, one line per hue-keyed family. Standard S4.6 moves to six at the
+  // Factory re-embed of this seed release; the seed leads by the brief's one-way order.
+  const HUE_SLOTS = 6;
+  const HUE_FAMILIES = [
+    { family: '[data-hue="N"]',      re: /\[data-hue=["']?(\d+)["']?\]/g,      source: "<Section hue>, the slot itself" },
+    { family: ".em-hue-N",           re: /\.em-hue-(\d+)\b/g,                  source: "<Em hue>, hue as text" },
+    { family: '[data-hue-bar="N"]',  re: /\[data-hue-bar=["']?(\d+)["']?\]/g,  source: "<TierCard hue>, the top bar" },
+    { family: '[data-hue-tint="N"]', re: /\[data-hue-tint=["']?(\d+)["']?\]/g, source: "a band or tint without grounding (R120)" },
+  ];
+  {
+    const css = stripComments(read(P.spineCss) || "");
+    const short = [];
+    for (const f of HUE_FAMILIES) {
+      const have = new Set([...css.matchAll(f.re)].map((m) => +m[1]));
+      const missing = [];
+      for (let n = 1; n <= HUE_SLOTS; n++) if (!have.has(n)) missing.push(n);
+      if (missing.length) short.push(`${f.family} (${f.source}) lacks slot(s) ${missing.join(", ")}`);
+    }
+    if (short.length) bad(`spine.css does not carry all ${HUE_SLOTS} S4.6 hue slots in every hue-keyed family (R112): ${short.join(" | ")}`);
+    else ok(`spine.css carries all ${HUE_SLOTS} S4.6 hue slots in each of ${HUE_FAMILIES.length} hue-keyed families`);
+    // THE LIST DECAYING IS A FINDING HERE TOO, by the carrier sweep's rule above. Any family spine.css
+    // keys on a hue number, by attribute ([x-hue-y="N"]) or by class (.x-hue-N, which .em-hue-N proves
+    // exists), that no HUE_FAMILIES entry matches is a family whose slot count nothing checks.
+    const seen = new Map();   // family -> one selector that keys it
+    for (const m of css.matchAll(/\[([\w-]*hue[\w-]*)=["']?\d+["']?\]/g)) if (!seen.has(`[${m[1]}="N"]`)) seen.set(`[${m[1]}="N"]`, m[0]);
+    for (const m of css.matchAll(/\.((?:[\w-]*-)?hue)-\d+\b/g)) if (!seen.has(`.${m[1]}-N`)) seen.set(`.${m[1]}-N`, m[0]);
+    const unlisted = [...seen].filter(([, sel]) => !HUE_FAMILIES.some((f) => new RegExp(f.re.source).test(sel))).map(([fam]) => fam);
+    if (unlisted.length) note(`spine.css keys hue-numbered family(ies) HUE_FAMILIES does not name: ${unlisted.join(", ")} -- ` +
+      `their slot count is UNCHECKED (R112). Add a line to HUE_FAMILIES in this file`);
+  }
+
+  // S4.6 hue slots + hue-as-text (declared-only; undeclared tokens skip below): the
+  // standard has ALWAYS said each declared --hue-N/--hue-N-ink pair is AA-gated, but no
+  // pair was in the list until v1.8.2 -- the gate now matches the standard. --hue-N-text
+  // (ruled in 2026-07-30) is checked as normal text on the three light grounds.
+  //
+  // EVERY DECLARED SLOT, WHATEVER N (R110). The loop ran n from 1 to 5, so a sixth slot was declared,
+  // used and never scored; #24 raised the bound to HUE_SLOTS. A bound is the same defect one slot
+  // later, so the slot numbers are read out of the skin: any --hue-N, --hue-N-ink or --hue-N-text it
+  // declares puts N in the loop, and a slot the skin declares nothing for adds no pair at all, where
+  // the bounded loop added four inert ones per slot to the derived count.
+  const declaredSlots = [...new Set([...Object.keys(T), ...Object.keys(TA)]
+    .map((name) => (name.match(/^--hue-(\d+)(?:-ink|-text)?$/) || [])[1]).filter(Boolean).map(Number))].sort((a, b) => a - b);
+  for (const n of declaredSlots) {
+    NORMAL_PAIRS.push([`--hue-${n}-ink`, `--hue-${n}`]);
+    NORMAL_PAIRS.push([`--hue-${n}-text`, "--bg"], [`--hue-${n}-text`, "--bg-alt"], [`--hue-${n}-text`, "--surface"]);
+  }
+  note(`hue slot pairs: every --hue-N the skin declares is gated, whatever N (R110): ` +
+    (declaredSlots.length ? declaredSlots.map((n) => `--hue-${n}`).join(", ") : "none declared"));
+  let aaChecked = 0;
+  // the accent-ground pair is asserted by its own loop below, at 3.0, and is derived all the same; the
+  // four inert pairs per undeclared slot the bounded hue loop used to add had hidden that it was not
+  // counted here (R110)
+  let derivedPairs = NORMAL_PAIRS.length + ACCENT_LARGE_PAIRS.length;
+  // "fg|bg" of every pair ASSERTED, so the denominator can say how many are distinct: one pair is
+  // asserted again under every label that reaches it (a crumb rule painting the tone's own ink).
+  const assertedKeys = new Set();
+  for (const [fg, bg, via] of NORMAL_PAIRS) {
+    // The GROUND must be opaque: a translucent ground composites over whatever sits behind
+    // the section, which this gate cannot see, so it is a NAMED skip rather than a guess.
+    const bgHex = T[bg];
+    if (!bgHex) { if (TA[bg]) skippedTokens.add(`${bg} (translucent GROUND -- what sits behind it is not knowable here)`); continue; }
+    const fgHex = resolveColour(fg, bgHex);
+    if (!fgHex) { if (!T[fg] && !TA[fg]) { /* undeclared: inert by S4.6, not a skip */ } else skippedTokens.add(fg); continue; }
+    const flat = !T[fg];
+    if (flat) flattenedPairs++;
+    aaChecked++;
+    assertedKeys.add(`${fg}|${bg}`);
+    const ratio = cr(fgHex, bgHex);
+    const label = `${fg} on ${bg}${flat ? ` (rgba flattened over the ground -> ${fgHex})` : ""}${via ? ` [${via}]` : ""}`;
+    if (ratio < 4.5) bad(`${label} = ${ratio.toFixed(2)} (< 4.5 normal)`);
+    else ok(`${label} = ${ratio.toFixed(2)}`);
+  }
+  // accentUses: does any accent-tone section carry small (non-display) text? If so the
+  // large-only sanction does not apply and we DO require 4.5. Heuristic: a Section with
+  // tone/data-tone="accent" that also renders Lead/body rather than only Display.
+  const sectionFiles = [...walk(P.content, [".tsx"]), ...walk(P.routes, [".tsx"])];
+  let accentSmallText = false;
+  for (const f of sectionFiles) {
+    const body = stripComments(read(f) || "");
+    const re = /tone=["']accent["']|data-tone=["']accent["']/g;
+    let m;
+    while ((m = re.exec(body))) {
+      const window = body.slice(m.index, m.index + 600);
+      if (/<Lead|<p[ >]|className=["'][^"']*\blead\b|<Body|<SecTitle/.test(window)) accentSmallText = true;
+    }
+  }
+  for (const [fg, bg] of ACCENT_LARGE_PAIRS) {
+    if (!T[fg] || !T[bg]) continue;
+    aaChecked++;
+    assertedKeys.add(`${fg}|${bg}`);
+    const ratio = cr(T[fg], T[bg]);
+    const threshold = accentSmallText ? 4.5 : 3.0;
+    if (ratio < threshold) bad(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (< ${threshold} ${accentSmallText ? "-- accent section carries small text" : "large"})`);
+    else ok(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (>= ${threshold}${accentSmallText ? "" : " large-only"})`);
+  }
+  if (accentSmallText) note("an accent-tone section appears to carry small text -- accent checked at 4.5, not the large-only 3.0");
+  // NON-TEXT CONTRAST, 3.0: THE FORM FIELD EDGE (R121, WCAG 1.4.11). A field's 2px edge is the only
+  // thing that shows where the control is, so it owes 3.0 against the FIELD it bounds and against
+  // the CARD the field sits in. The spine drew it in --line, the rule-and-divider token, and nothing
+  // scored it: 1.27 against the field and 1.38 against the card on this seed's skin, on every form.
+  //
+  // EVERY OPERAND IS READ OUT OF spine.css, NONE IS NAMED HERE: the edge token from the
+  // `.form-card input` rule's border, the field ground from the same rule's background, the card
+  // ground from `.form-card`'s background, and every `[data-card-ground]` override of --card-bg as a
+  // further card ground. Each var() chain resolves to the first token the skin declares, as the
+  // cascade does. A translucent edge is FLATTENED over the field's own ground before it is scored
+  // against either side, because that is the pixel the browser paints: the field's background runs
+  // under its border. The FOCUSED edge (the `:focus` rule's border token) is scored against the same
+  // grounds, below.
+  let nonTextChecked = 0;
+  {
+    const css = stripComments(read(P.spineCss) || "");
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sels: m[1].split(",").map((s) => s.trim()), body: m[2] }));
+    const declOf = (body, prop) => (body.match(new RegExp("(?:^|[;\\s])" + prop + "\\s*:\\s*([^;]+)")) || [])[1] || null;
+    const fromVar = (v) => (v && v.includes("var(") ? v.slice(v.indexOf("var(")) : null);
+    // first opaque token the skin declares along a chain; a translucent GROUND is named, not guessed
+    const opaqueGround = (expr) => {
+      for (const m of (expr || "").matchAll(/(--[\w-]+)/g)) {
+        if (T[m[1]]) return m[1];
+        if (TA[m[1]]) { skippedTokens.add(`${m[1]} (translucent GROUND -- what sits behind it is not knowable here)`); return null; }
+      }
+      return null;
+    };
+    const field = rules.filter((r) => r.sels.includes(".form-card input") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
+    const card = rules.filter((r) => r.sels.includes(".form-card") && declOf(r.body, "background(?:-color)?")).pop();
+    const edgeExpr = field && fromVar(declOf(field.body, "border(?:-color)?"));
+    const fieldExpr = field && fromVar(declOf(field.body, "background(?:-color)?"));
+    const cardExpr = card && fromVar(declOf(card.body, "background(?:-color)?"));
+    if (!edgeExpr || !fieldExpr || !cardExpr) {
+      soft(`cannot score the form field edge: spine.css has no ${!edgeExpr ? "`.form-card input` border token" : !fieldExpr ? "`.form-card input` background" : "`.form-card` background"} to read (WCAG 1.4.11 owes the edge 3.0)`);
+    } else {
+      const edge = (() => { for (const m of edgeExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
+      const fieldG = opaqueGround(fieldExpr);
+      const cardGs = [opaqueGround(cardExpr)];
+      if (/--card-bg\b/.test(cardExpr)) {
+        for (const r of rules) {
+          if (!r.sels.some((s) => /\[data-card-ground=/.test(s))) continue;
+          const v = fromVar(declOf(r.body, "--card-bg"));
+          const g = v && opaqueGround(v);
+          if (g) cardGs.push(g);
+        }
+      }
+      if (!edge || !fieldG) {
+        soft(`cannot score the form field edge: ${!edge ? `no token along ${edgeExpr.trim()} is declared` : `the field ground ${fieldExpr.trim()} does not resolve to an opaque token`}`);
+      } else {
+        const fieldHex = T[fieldG];
+        const sides = [["the field", fieldG], ...[...new Set(cardGs.filter(Boolean))].map((g) => ["the card", g])];
+        const scoreEdge = (what, tok) => {
+          const edgeHex = resolveColour(tok, fieldHex);
+          const flat = !T[tok];
+          const lbl = `${what} ${tok}${flat ? ` (rgba flattened over the field ${fieldG} -> ${edgeHex})` : ""}`;
+          for (const [side, g] of sides) {
+            nonTextChecked++;
+            const ratio = cr(edgeHex, T[g]);
+            if (ratio < 3.0) bad(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (< 3.0 non-text, WCAG 1.4.11)`);
+            else ok(`${lbl} vs ${side} ${g} = ${ratio.toFixed(2)} (>= 3.0 non-text)`);
+          }
+        };
+        scoreEdge("form field edge", edge);
+        // THE FOCUSED EDGE, against the same grounds. The rest rule sets `outline: none`, so the
+        // `:focus` border colour is the ONLY thing that shows which field has focus, and a re-skin
+        // edits only tokens.css: a paler accent loses WCAG 1.4.11 and the visible focus indicator
+        // together. Read out of spine.css the same way, from the rule naming `.form-card input:focus`.
+        const focus = rules.filter((r) => r.sels.includes(".form-card input:focus") && /(?:^|[;\s])border(?:-color)?\s*:[^;]*var\(/.test(r.body)).pop();
+        const focusExpr = focus && fromVar(declOf(focus.body, "border(?:-color)?"));
+        const focusTok = focusExpr && (() => { for (const m of focusExpr.matchAll(/(--[\w-]+)/g)) if (T[m[1]] || TA[m[1]]) return m[1]; return null; })();
+        if (!focusTok) soft(`cannot score the form field focus edge: spine.css has ${!focusExpr ? "no `.form-card input:focus` border token" : `no declared token along ${focusExpr.trim()}`} to read (it is the field's only focus indicator, and WCAG 1.4.11 owes it 3.0)`);
+        else scoreEdge("form field focus edge", focusTok);
+      }
+    }
+  }
+  // THE DENOMINATOR, AND THE CHOICE, STATED IN THE SAME PLACE. A checker that reports a
+  // verdict without its denominator has been silently narrowed before while it kept printing
+  // OK, and the rgba class was outside the checked set for weeks with nothing saying so.
+  // AND THE ASSERTIONS ARE NOT THE PAIRS: a pair two labels reach is asserted twice and is one
+  // ink on one ground, so the line says how many DISTINCT pairs the assertions cover. Without it a
+  // list that re-asserts pairs already in the matrix reads as new coverage.
+  note(`AA denominator: ${derivedPairs} pair(s) derived, ${aaChecked} asserted, covering ` +
+       `${assertedKeys.size} distinct ink/ground pair(s) (${aaChecked - assertedKeys.size} re-assert a pair ` +
+       `already asserted, under a further label; ${flattenedPairs} assertion(s) with a translucent ink ` +
+       `FLATTENED over its ground per the mapping profile's Rule B), ${skippedTokens.size} token(s) unresolvable; ` +
+       `${nonTextChecked} non-text pair(s) asserted at 3.0 (the form field edge, at rest and on focus); ` +
+       `hue slot(s) composed as a ground: ${groundRoutes.section.size} by <Section hue>, ${groundRoutes.carrier.size} ` +
+       `by a hue carrier (<TierCard hue>, data-hue-tint), ${groundRoutes.component.size} by a component prop or an ` +
+       `inline style (R063)`);
+  if (skippedTokens.size) note(`tokens the AA matrix could NOT resolve, by name: ${[...skippedTokens].join(", ")}`);
+  if (!aaChecked) bad("no colour token pairs found to check (tokens.css missing or unparseable)");
+  return { aaChecked, distinct: assertedKeys.size, nonTextChecked };
 }
-// THE DENOMINATOR, AND THE CHOICE, STATED IN THE SAME PLACE. A checker that reports a
-// verdict without its denominator has been silently narrowed before while it kept printing
-// OK, and the rgba class was outside the checked set for weeks with nothing saying so.
-// AND THE ASSERTIONS ARE NOT THE PAIRS: a pair two labels reach is asserted twice and is one
-// ink on one ground, so the line says how many DISTINCT pairs the assertions cover. Without it a
-// list that re-asserts pairs already in the matrix reads as new coverage.
-note(`AA denominator: ${derivedPairs} pair(s) derived, ${aaChecked} asserted, covering ` +
-     `${assertedKeys.size} distinct ink/ground pair(s) (${aaChecked - assertedKeys.size} re-assert a pair ` +
-     `already asserted, under a further label; ${flattenedPairs} assertion(s) with a translucent ink ` +
-     `FLATTENED over its ground per the mapping profile's Rule B), ${skippedTokens.size} token(s) unresolvable; ` +
-     `${nonTextChecked} non-text pair(s) asserted at 3.0 (the form field edge, at rest and on focus)`);
-if (skippedTokens.size) note(`tokens the AA matrix could NOT resolve, by name: ${[...skippedTokens].join(", ")}`);
-if (!aaChecked) bad("no colour token pairs found to check (tokens.css missing or unparseable)");
+{
+  const baseLines = new Set();
+  const recorded = (fn, kind) => (m) => { baseLines.add(`${kind}|${m}`); fn(m); };
+  aaMatrix(BASE_T, BASE_TA, { ok: recorded(ok, "ok"), bad: recorded(bad, "bad"), soft: recorded(soft, "soft"), note: recorded(note, "note") });
+  if (!TOKEN_BLOCKS.skins.size) note("skins: tokens.css carries no [data-skin] block, so [2] scored the base :root alone (R110)");
+  for (const [name, skin] of TOKEN_BLOCKS.skins) {
+    const s = skinMaps(skin.bodies.join("\n"));
+    const tag = `skin "${name}": `;
+    let same = 0, failed = 0;
+    const ownLine = (fn, kind) => (m) => {
+      if (baseLines.has(`${kind}|${m}`)) { same++; return; }
+      if (kind === "bad") failed++;
+      fn(tag + m);
+    };
+    const r = aaMatrix(s.T, s.TA, { ok: ownLine(ok, "ok"), bad: ownLine(bad, "bad"), soft: ownLine(soft, "soft"), note: ownLine(note, "note") });
+    if (s.unread.length) note(`${tag}colour token(s) declared with a value [2] cannot read, so they are dropped from this ` +
+      `skin's map rather than scored at the base value: ${s.unread.join(", ")}`);
+    note(`${tag}${skin.selector} scored as its own map over the base :root (${s.declared.size} token(s) declared ` +
+      `there): ${r.aaChecked} assertion(s) covering ${r.distinct} distinct pair(s) and ${r.nonTextChecked} non-text ` +
+      `pair(s); ${failed} FAIL line(s) of its own, ${same} line(s) identical to the base pass not repeated (R110)`);
+  }
+}
 
 // == 3. VOICE -- em-dash literal AND entity forms (auditor hardening) ==
 out.push("\n[3] VOICE -- zero prose em-dashes (literal + entity); superlatives flagged");
@@ -1201,7 +1430,38 @@ out.push("\n[5] CHARTER <-> REPO -- routes match in BOTH directions");
 // in the prose: one coincidental token was the only thing stopping the check from admitting
 // it had parsed nothing. Widening the regex would have kept the scavenging; a delimited
 // block ends it.
-const routeToPath = (r) => (r === "index" ? "/" : `/${r}`);
+// A ROUTE FILE'S PATH IS TANSTACK ROUTER'S FILE CONVENTION, NOT ITS BASENAME (R111). This keyed each
+// file by basename(f) with `.tsx` stripped, so `takken.kapoenen.tsx` read as `/takken.kapoenen`
+// where the router serves `/takken/kapoenen`, and `takken/kapoenen.tsx` lost its parent and read as
+// `/kapoenen`; sz-site took flat tak routes to stay clear of it. The convention, as the router's
+// generator applies it: a directory and an unescaped `.` each end a segment and `[x]` escapes x;
+// `index` is its parent's own page and a final `route` is its directory's route; a segment opening
+// with `_` is a pathless layout and a `(x)` segment a group, and neither is in the URL; a trailing `_`
+// is dropped; a `.lazy` file is its route's lazy half; and a file or directory opening with `-` is
+// not a route at all. A file whose last segment is a layout or a group has no path of its own, so it
+// returns null and [5] names it rather than reading it as a page.
+const routePathOf = (file) => {
+  const rel = relative(P.routes, file).replace(/\\/g, "/").replace(/\.tsx$/, "").replace(/\.lazy$/, "");
+  // each segment as { text } for the URL and { raw } for the tests, an escaped character reading as
+  // a plain letter in `raw` so `[_]x` is not a layout and `[.]` does not split
+  const segs = [{ text: "", raw: "" }];
+  let esc = false;
+  for (const c of rel) {
+    const cur = segs[segs.length - 1];
+    if (esc) { if (c === "]") esc = false; else { cur.text += c; cur.raw += "x"; } }
+    else if (c === "[") esc = true;
+    else if (c === "/" || c === ".") segs.push({ text: "", raw: "" });
+    else { cur.text += c; cur.raw += c; }
+  }
+  const pathless = (s) => s.raw.startsWith("_") || /^\(.*\)$/.test(s.raw);
+  if (segs.some((s) => s.raw.startsWith("-"))) return null;
+  const last = segs[segs.length - 1].raw;
+  if (last === "index") segs.pop();
+  else if (last === "route") { segs.pop(); if (segs.length && pathless(segs[segs.length - 1])) return null; }
+  else if (pathless(segs[segs.length - 1])) return null;
+  const kept = segs.filter((s) => !pathless(s)).map((s) => (s.raw.endsWith("_") ? s.text.slice(0, -1) : s.text)).filter(Boolean);
+  return "/" + kept.join("/");
+};
 const normalise = (d) => {
   let t = d.trim().replace(/[`'"]/g, "");
   if (!t || t.startsWith("#")) return null;
@@ -1217,12 +1477,14 @@ if (CHARTER && existsSync(CHARTER)) {
          `is read as a route declaration` + (CI ? " (failing closed in CI)" : ""));
   } else {
     const declared = new Set(block[1].split("\n").map(normalise).filter(Boolean));
-    const repoPaths = new Map(
-      routeFiles.map((f) => {
-        const r = basename(f).replace(/\.tsx$/, "");
-        return [routeToPath(r), relative(ROOT, f)];
-      })
-    );
+    const repoPaths = new Map(), noPath = [];
+    for (const f of routeFiles) {
+      const p2 = routePathOf(f);
+      if (p2 === null) noPath.push(relative(ROOT, f));
+      else repoPaths.set(p2, relative(ROOT, f));
+    }
+    if (noPath.length) note(`route file(s) the router reads as a pathless layout, a group or an ignored file, ` +
+      `so they declare no path of their own and are not reconciled (R111): ${noPath.join(", ")}`);
     const orphanInRepo = [...repoPaths.keys()].filter((p2) => !declared.has(p2));
     const declaredNotBuilt = [...declared].filter((p2) => !repoPaths.has(p2));
     if (!declared.size) bad(`charter \`\`\`routes block is empty`);
@@ -1643,6 +1905,58 @@ out.push("\n[10] PHONE MENU -- a nav item's children are reachable in the open p
       `${missing.join("; ")}. A nav item's children are unreachable on a touch screen (R125)`);
     else ok(`open phone menu (@media ${phone.query}): every .submenu is static, shown, untransformed and indented ` +
       `under its parent, displayed and not collapsed or clipped (read from ${where})`);
+  }
+}
+
+// == 11. BUILD OUTPUT -- a linked public/ file reaches the published build byte for byte (R109) ==
+// The prerender crawl (`crawlLinks`) follows every local <a href> in every page it renders and writes
+// the RESPONSE TEXT to that path in the output, so a linked /menu.pdf is fetched, decoded as text and
+// written over the copy Vite made of public/menu.pdf: the deployed file is corrupt and the build says
+// it succeeded (@tanstack/start-plugin-core dist/esm/prerender.js, `await res.text()` then
+// `writeFile`). The seed's vite.config.ts filters such paths out of the crawl, and a site that sets
+// crawlLinks owes the same filter. Nothing read the build, so a missing or wrong filter shipped
+// silently. This reads the BYTES, not the config.
+//
+// WHAT IS COMPARED IS WHAT THE CRAWL CAN REACH: every public/ file a built page links with <a href>,
+// read with the crawl's own pattern, against its copy in the directory the host publishes
+// (netlify.toml's `publish`, `dist/client` where none is set). Not every public/ file: a build
+// plugin may rewrite one on purpose (Nitro appends its fallback to `_headers`), and that is not this
+// defect. It reads the build the gate workflow makes in the step before this one; with no publish
+// directory to read it has verified nothing, so that is soft(): a warning locally, a failure under --ci.
+out.push("\n[11] BUILD OUTPUT -- a public/ file a built page links reaches the published build byte for byte");
+{
+  const pub = join(ROOT, "public");
+  const toml = read(join(ROOT, "netlify.toml")) || "";
+  const publish = ((toml.match(/^\s*publish\s*=\s*["']([^"']+)["']/m) || [])[1] || "dist/client").replace(/^\.?\/+|\/+$/g, "");
+  const built = join(ROOT, publish);
+  if (!walk(pub, null).length) note("public/ holds no files, so the crawl has nothing to overwrite and nothing is compared");
+  else if (!existsSync(built)) {
+    soft(`no ${publish} to read (the directory netlify.toml publishes), so no linked public/ file is shown to reach ` +
+      `the build intact: build first (the gate workflow builds in the step before this one) (R109)`);
+  } else {
+    const pages = walk(built, [".html"]);
+    const linked = new Set();
+    for (const f of pages)
+      for (const m of (read(f) || "").matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>/g)) {
+        if (!/^\.?\//.test(m[1])) continue;
+        let rel;
+        try { rel = decodeURIComponent(m[1].replace(/^\.?\/+/, "").split(/[?#]/)[0]); } catch { continue; }
+        const src = join(pub, rel);
+        if (rel && existsSync(src) && statSync(src).isFile()) linked.add(rel);
+      }
+    const differ = [], absent = [];
+    for (const rel of [...linked].sort()) {
+      const copy = join(built, rel);
+      if (!existsSync(copy)) absent.push(rel);
+      else if (!readFileSync(join(pub, rel)).equals(readFileSync(copy))) differ.push(rel);
+    }
+    if (differ.length) bad(`${publish} copy differs from its public/ source for linked file(s): ${differ.join(", ")}. The ` +
+      `prerender crawl fetched each as a page and wrote the response over it as text; filter such paths out of the ` +
+      `crawl (vite.config.ts prerender.filter) (R109)`);
+    if (absent.length) bad(`linked public/ file(s) missing from ${publish}: ${absent.join(", ")} (R109)`);
+    if (!pages.length) note(`${publish} holds no prerendered page, so no crawl wrote there and no linked public/ file is compared (R109)`);
+    else if (!differ.length && !absent.length) ok(`${linked.size} public/ file(s) linked from ${pages.length} built page(s) ` +
+      `are byte-identical in ${publish} (R109)`);
   }
 }
 

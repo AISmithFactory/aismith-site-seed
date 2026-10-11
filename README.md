@@ -192,9 +192,61 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C7
   that can apply at phone width. Each `.submenu` must be static, shown, untransformed, indented under
   its parent, displayed, and neither collapsed to no height nor clipped.
 
+### What `[2]`, `[5]` and `[11]` gained on 2026-10-11 (brief W14)
+
+Each one has a planted negative and a green control in `verify.selftest.mjs` (C13 to C16).
+
+- **Every skin block on its own (R110).** `tokens.css` admits a second skin as a selector ending in
+  `:root`, written `[data-skin="x"]:root`. `[2]` read the whole file as one map, so the later block's
+  values won and the other skin was never scored. Now the base is every `:root` block with no
+  `data-skin`, and each skin is scored as its own map laid over the base, as the cascade lays it
+  (the skin's selector outranks `:root`, wherever the blocks sit). A skin's lines carry its name, and
+  only the lines that differ from the base pass are printed, then one line with the skin's own
+  denominator. A colour the skin declares with a value `[2]` cannot read is dropped from its map and
+  named, never scored at the base value.
+- **Every declared hue slot, whatever N (R110).** The `--hue-N` / `--hue-N-ink` and `--hue-N-text`
+  pairs are read from the slots the skin declares, not from a bound. The AA denominator's `derived`
+  count no longer carries four inert pairs per undeclared slot, and now counts the accent-ground pair.
+- **Hue grounds through a component prop or an inline style (R063).** A component anywhere under
+  `src/` whose body writes a destructured prop as its `background` (zuidgeluid-site's
+  `<IlluStage sheet>`) composes a ground wherever the markup passes it a flat `var(--hue-N)`, and so
+  does an inline `style={{ background: "var(--hue-N)" }}`. On that ground `[2]` scores the colour the
+  component or the style declares and, for literal text inside the tag, the enclosing Section's ink.
+  A gradient or `color-mix()` ground is named and not scored. The line also counts the
+  `var(--hue-N)` references in the markup it did not place as a ground (fills, strokes, borders, or
+  values routed through data), and the AA denominator says how many slots each route composed.
+- **`[5]` reads route paths by TanStack Router's file convention (R111).** A directory and an
+  unescaped `.` each end a segment (`takken.kapoenen.tsx` and `takken/kapoenen.tsx` are both
+  `/takken/kapoenen`), `[x]` escapes, `index` and a final `route` are their parent's page, `_x`
+  layouts and `(x)` groups are not in the URL, a trailing `_` is dropped, `.lazy` is its route's lazy
+  half, and a `-` prefix is not a route. A file with no path of its own is named, not reconciled.
+- **`[11]` BUILD OUTPUT (R109).** The prerender crawl writes every local link it follows as TEXT, so
+  a linked `public/` binary was corrupted in `dist/` while the build reported success.
+  `vite.config.ts` now sets `prerender.filter` to crawl plain page paths only (no `?`, `#` or file
+  extension), and `[11]` fails a build where a `public/` file that a built page links with
+  `<a href>` (the crawl's own rule) is not byte-identical in the directory `netlify.toml` publishes
+  (`dist/client` where none is set). An unlinked file is not compared, since a build plugin may
+  rewrite one on purpose (Nitro appends to `_headers`). With no publish directory it has verified
+  nothing: a warning locally, a failure under `--ci`. The gate workflow builds in the step before the
+  gate, so CI always has one.
+
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
+
+No spine file moves. The Factory re-embeds this release at site-contract 1.8.31 (plan job K1) with
+W13's, and each site takes it at its resync.
+
+- **R110** `[2]` scores each `[data-skin="x"]:root` block as its own map over the base `:root`, and
+  every `--hue-N` pair the skin declares, whatever N.
+- **R111** `[5]` derives each route's path by TanStack Router's file convention, not its basename.
+- **R063** `[2]` reaches hue grounds composed through a component prop or an inline style, beyond
+  `<Section hue>` and `<TierCard hue>`, and its denominator says how many slots each route composed.
+- **R109** (seed half) `vite.config.ts` crawls plain page paths only, and the new `[11]` fails a build
+  whose published copy of a linked `public/` file differs from the source. Each site that sets
+  `crawlLinks` takes the filter at its own resync.
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W13: the spine defects and the hue slots)
 
