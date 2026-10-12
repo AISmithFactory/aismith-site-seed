@@ -619,18 +619,28 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
     }
   }
   // THE GROUND HALF OF row 046: `<Section hue>` IS NOT THE ONLY HUE CARRIER, and the ones it
-  // misses carry HARDCODED inks. Everything above discovers grounds from `[data-hue="N"]`, which is
-  // what `<Section hue>` renders. `<TierCard hue={N}>` renders `data-hue-bar={N}`, spine.css turns
-  // that into `--tier-bar: var(--hue-N)`, and `.tier-card .tier-ico` paints `color: var(--on-dark)`
-  // ON that background. So a real ink lands on a real hue ground through a path no [data-hue] block
-  // and no [data-tone] selector appears in, and TONE_KEYED above cannot see it either, because the
+  // misses carry inks of their own. Everything above discovers grounds from `[data-hue="N"]`, which
+  // is what `<Section hue>` renders. `<TierCard hue={N}>` renders `data-hue-bar={N}`, spine.css turns
+  // that into `--tier-bar: var(--hue-N)`, and `.tier-card .tier-ico` paints its ink ON that
+  // background. So a real ink lands on a real hue ground through a path no [data-hue] block and no
+  // [data-tone] selector appears in, and TONE_KEYED above cannot see it either, because the
   // selector is keyed on the GROUND rather than on the tone.
+  //
+  // THE INK IS RESOLVED THROUGH THE SLOT'S OWN BLOCK (W-tier, ruled 2026-10-12). The icon painted a
+  // hardcoded `--on-dark` on every slot, which reddened zuidgeluid-site's hues 1 to 3 (1.72, 1.33,
+  // 2.06) while each declared a dark `--hue-N-ink`. Each `[data-hue-bar="N"]` block now also sets
+  // `--tier-ink: var(--hue-N-ink, var(--on-dark))` and the icon reads `var(--tier-ink,
+  // var(--on-dark))`, so the ink scored is the first name in that chain the skin declares, read
+  // through the custom properties the carrier's own block sets for that slot, as the cascade
+  // resolves it. A slot whose block sets no `--tier-ink`, or a skin that declares the hue and no
+  // ink, falls back to `--on-dark` here exactly as it does in the browser, and is scored there.
   //
   // THE THRESHOLD IS THE NORMAL-TEXT 4.5 AND NO NEW RULE IS ADDED HERE. A tier-ico ground carries an
   // ICON rather than body text, and WCAG puts non-text contrast at 3.0, so 4.5 is arguably strict
   // for it. Measured on zuidgeluid-site 2026-09-18, the three cells this finds are 1.72, 1.33 and
   // 2.06, which clear NEITHER threshold, so the threshold question does not decide any live cell and
   // a second threshold rule would be ceremony. It is raised in the PR that added this, not settled.
+  // Since the icon reads its slot's own ink (W-tier), those three cells score that ink instead.
   //
   // A LIST A STRANGER CAN EXTEND, one line per carrier, each naming the component that renders the
   // attribute and the spine.css anchor that grounds it. `data-hue` is listed for completeness and
@@ -682,16 +692,42 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
     // and declares a colour. A selector with no colour (the 6px ::before rule) grounds no text and
     // is not a pair.
     const carrierPairs = [];
+    // a composed slot the loop below cannot score is NAMED, never skipped in silence (the code
+    // review of #26, F2): the ground falls back where the hue is undeclared while the block may
+    // still resolve an ink of the slot's own family, a pair no line below asserts
+    const unscored = [];
+    // the ink a rule's `color` paints on slot n: each name in its var() chain in order, a custom
+    // property the carrier's own block sets for that slot (--tier-ink) expanded through that block's
+    // value, and otherwise the first name the skin declares. `via` collects the block properties it
+    // went through, so the label names the route.
+    const carrierInk = (expr, own, via = [], depth = 0) => {
+      for (const m of expr.matchAll(/(--[\w-]+)/g)) {
+        const name = m[1];
+        if (own.has(name) && depth < 4) {
+          const r = carrierInk(own.get(name), own, [...via, name], depth + 1);
+          if (r) return r;
+          continue;
+        }
+        if (T[name] || TA[name]) return { ink: name, via };
+      }
+      return null;
+    };
     for (const c of HUE_CARRIERS) {
       if (c.handledAbove) continue;
       const tags = [...(carrierTags[c.attr] || [])];
       const props = new Map();                 // hue number -> indirection property name
+      const decls = new Map();                 // hue number -> Map(custom property -> value) its block sets
       for (const m of css.matchAll(new RegExp("\\[" + c.attr + "=[\"']?(\\d+)[\"']?\\]\\s*\\{", "g"))) {
         const start = m.index + m[0].length;
         const end = css.indexOf("}", start);
         if (end < 0) continue;
-        const d = css.slice(start, end).match(/(--[\w-]+)\s*:\s*var\(\s*--hue-(\d+)/);
+        const body = css.slice(start, end);
+        // the ground property reads the SLOT itself, `var(--hue-N,` or `var(--hue-N)`, so an ink
+        // property reading `var(--hue-N-ink` is never taken for it, whichever the block sets first
+        const d = body.match(/(--[\w-]+)\s*:\s*var\(\s*--hue-(\d+)\s*[,)]/);
         if (d && d[2] === m[1]) props.set(m[1], d[1]);
+        if (!decls.has(m[1])) decls.set(m[1], new Map());
+        for (const x of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+)/g)) decls.get(m[1]).set(x[1], x[2].trim());
       }
       if (!props.size) { note(`hue carrier ${c.attr}: no [${c.attr}="N"] block in spine.css resolves to a --hue-N slot; nothing to score (${c.source})`); continue; }
       // which N values the MARKUP actually composes through one of this carrier's components, or
@@ -711,21 +747,35 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
       for (const n of [...used].sort()) {
         const prop = props.get(n);
         const hue = `--hue-${n}`;
-        if (!prop || (!T[hue] && !TA[hue])) continue;      // undeclared slot stays inert (S4.6)
+        if (!prop || (!T[hue] && !TA[hue])) {              // undeclared slot stays inert (S4.6), and is named
+          const reads = [...(decls.get(n) || new Map()).values()].flatMap((v) => [...v.matchAll(/(--[\w-]+)/g)].map((x) => x[1]));
+          const own = [...new Set(reads)].filter((t) => t.startsWith(`${hue}-`) && (T[t] || TA[t]));
+          const why = !decls.has(n) ? `spine.css has no [${c.attr}="${n}"] block`
+            : !prop ? `its block grounds on no var(${hue})` : `${hue} undeclared`;
+          const ink = own.length ? `; its block still reads the declared ${own.join(", ")}, painted on a ground no pair asserts` : "";
+          unscored.push(`${c.attr}=${n} (${why}${ink})`);
+          continue;
+        }
         composedHues.add(n);
         groundRoutes.carrier.add(n);
         for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
           const body = r[2];
           if (!new RegExp("background(?:-color)?\\s*:\\s*var\\(\\s*" + prop + "\\b").test(body)) continue;
-          const ink = body.match(/(?:^|[;\s])color\s*:\s*var\(\s*(--[\w-]+)/);
-          if (!ink) continue;                               // grounds no text: not a pair
-          carrierPairs.push([ink[1], hue, `${r[1].trim()} on ${c.attr}=${n} (${prop})`]);
+          const expr = body.match(/(?:^|[;\s])color\s*:\s*(var\([^;]+)/);
+          if (!expr) continue;                              // grounds no text: not a pair
+          // an unresolved chain keeps its first name, which the loop below treats as inert (S4.6)
+          const got = carrierInk(expr[1], decls.get(n) || new Map()) || { ink: (expr[1].match(/(--[\w-]+)/) || [])[1], via: [] };
+          if (!got.ink) continue;
+          const route = got.via.length ? `; ink ${[...got.via, got.ink].join(" -> ")}` : "";
+          carrierPairs.push([got.ink, hue, `${r[1].trim()} on ${c.attr}=${n} (${prop}${route})`]);
         }
       }
     }
     for (const pr of carrierPairs) NORMAL_PAIRS.push(pr);
     if (carrierPairs.length) note(`hue carriers beyond <Section hue>: ${carrierPairs.length} pair(s) added -- ` +
       carrierPairs.map((x) => `${x[0]} on ${x[1]} via ${x[2]}`).join(" | "));
+    if (unscored.length) note(`hue carrier slot(s) composed in the markup that [2] could not score on a hue ground: ` +
+      unscored.join(" | "));
     // (iii) the list decaying is a FINDING. Any data-hue* attribute the spine layer ships that no
     // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
     // carrier gets added instead of being missed.
