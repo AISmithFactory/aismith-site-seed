@@ -41,7 +41,22 @@
 // same path named and not failed, beside a rewrite that still fails (F2). Run against #25's head
 // before the fold, 7 of these 9 assertions FAIL; the two that hold there are marked REGRESSION GUARD.
 //
-// EXTENDED 2026-10-12 (brief S-NV U1, plan-nav-variant U1) by the check THAT run added: C17 the nav item
+// EXTENDED 2026-10-12 (brief W-tier) by the check THAT run changed: C17 the tier icon scored in its
+// slot's own ink through --tier-ink, with three plants that make the icon fall back to --on-dark on
+// a light hue and two green controls. The base fixture's spine takes the shipped --tier-ink shape,
+// so C3's --hue-3 cell is now the --on-dark FALLBACK (the tokens declare no --hue-3-ink). Run
+// against the verify.mjs of main before that run, 5 assertions FAIL: four of C17's six and C3's
+// first, which main leaves unscored because it read --tier-ink as an undeclared token, inert. The
+// two of C17's that hold there are marked REGRESSION GUARD.
+//
+// FOLDED the same day from the code review of PR #26 (F2): a hue carrier slot the markup composes
+// and [2] cannot score is NAMED in a note rather than skipped with no line. C3's undeclared slot is
+// named (its no-pair assertion now reads every line but that note), and C17 gains two plants, the
+// ink declared with no hue and a block grounding on no var(--hue-N), beside a green control naming
+// nothing. Run against #26's head before the fold, 3 of these 4 assertions FAIL; the control that
+// holds there is marked REGRESSION GUARD.
+//
+// EXTENDED 2026-10-12 (brief S-NV U1, plan-nav-variant U1) by the check THAT run added: C18 the nav item
 // variant SPOTLIGHT, declared and then enforced (D7). In use is read from the built page, a variant set
 // through a constant included; the four slots its rules pair are required as opaque colours; a
 // half-declared pair FAILS rather than being skipped; --accent is scored at 3.0 on the hot header's
@@ -52,7 +67,7 @@
 // there are the fixture's own literal guard and the mutant's green, main carrying no such check at all.
 //
 // FOLDED the same day from the code review of PR #28, each finding with its own plant and control, all
-// in C17: the header's pair joined to its ground with whitespace taken out, and a spine that writes the
+// in C18: the header's pair joined to its ground with whitespace taken out, and a spine that writes the
 // variant failing unless both pairs parse, planted as the ink rule deleted and as one space taken out
 // of a :has() (F1); the current-page bar under the hot item scored on the item's own ground where a
 // built page has the item as the current page, and named as not derived where none does (F2); D6 held
@@ -106,6 +121,8 @@ const SHA40 = "0".repeat(40);
 //
 // --on-dark (#ffffff) on --hue-3 (#8a8a8a) is 3.45, which is BELOW 4.5: that is the cell the
 // hue-carrier case needs, and it is the cell the tone-keyed and [data-hue] paths cannot reach.
+// --hue-3 declares no ink, so the tier icon's --tier-ink falls back to --on-dark there; --hue-1 is a
+// light hue that declares one, which is the cell C17 needs.
 const TOKENS = `:root {
   --bg: #ffffff;
   --bg-alt: #f2f2f2;
@@ -134,15 +151,15 @@ const SPINE_CSS = `[data-tone="paper"] { --sec-bg: var(--bg); --sec-text: var(--
 [data-hue="1"] { --sec-bg: var(--hue-1, var(--tone-bg)); --sec-text: var(--hue-1-ink, var(--tone-text)); --sec-soft: var(--hue-1-soft, var(--hue-1-ink, var(--tone-soft))); }
 [data-hue="3"] { --sec-bg: var(--hue-3, var(--tone-bg)); --sec-text: var(--hue-3-ink, var(--tone-text)); --sec-soft: var(--hue-3-soft, var(--hue-3-ink, var(--tone-soft))); }
 .tier-card::before { content: ""; height: 6px; background: var(--tier-bar, var(--accent)); }
-.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }
-.tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); }
-.tier-card .tier-ico { width: 46px; height: 46px; background: var(--tier-bar, var(--accent)); color: var(--on-dark); }
+.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); --tier-ink: var(--hue-3-ink, var(--on-dark)); }
+.tier-card .tier-ico { width: 46px; height: 46px; background: var(--tier-bar, var(--accent)); color: var(--tier-ink, var(--on-dark)); }
 ` +
 // The six-slot families [2] requires (R112), generated one line per slot so a case can drop a slot
 // by line: the remaining [data-hue] and data-hue-bar slots, then .em-hue-N and data-hue-tint 1-6.
 [2, 4, 5, 6].map((n) =>
   `[data-hue="${n}"] { --sec-bg: var(--hue-${n}, var(--tone-bg)); --sec-text: var(--hue-${n}-ink, var(--tone-text)); --sec-soft: var(--hue-${n}-soft, var(--hue-${n}-ink, var(--tone-soft))); }\n` +
-  `.tier-card[data-hue-bar="${n}"] { --tier-bar: var(--hue-${n}, var(--accent)); }\n`).join("") +
+  `.tier-card[data-hue-bar="${n}"] { --tier-bar: var(--hue-${n}, var(--accent)); --tier-ink: var(--hue-${n}-ink, var(--on-dark)); }\n`).join("") +
 [1, 2, 3, 4, 5, 6].map((n) =>
   `.em-hue-${n} { color: var(--hue-${n}-text, currentColor); }\n` +
   `[data-hue-tint="${n}"] { --hue-tint: var(--hue-${n}, var(--accent)); }\n`).join("") +
@@ -261,7 +278,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -323,8 +340,9 @@ console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (
 // ---- C3. row 046, GROUND half: a hue carrier that is not <Section hue> ------------------------
 {
   // The mutation is ONE TierCard gaining hue={3}. `data-hue-bar` grounds `.tier-card .tier-ico`
-  // in --hue-3 and that selector hardcodes `color: var(--on-dark)` = 3.45, a real ink on a real
-  // ground that no [data-hue] block and no [data-tone] selector appears in.
+  // in --hue-3 and that selector paints `var(--tier-ink, var(--on-dark))`, which falls back to
+  // --on-dark = 3.45 because the tokens declare no --hue-3-ink: a real ink on a real ground that no
+  // [data-hue] block and no [data-tone] selector appears in.
   const fx = build("carrier-tiercard", {
     indexTsx: `export const Route = { head: () => ({ title: "Home" }) };
 export const Page = () => <Section tone="paper"><TierCard hue={3}>plan</TierCard></Section>;
@@ -349,7 +367,13 @@ export const Page = () => <Section tone="paper"><TierCard hue={2}>plan</TierCard
 `,
   });
   const out = run(fx);
-  expect("a carrier on an undeclared hue slot adds no pair", !out.includes("--hue-2"), lineOf(out, "--hue-2"));
+  // the one line that may name --hue-2 is the note naming the slot as unscored (the code review of
+  // #26, F2); any other line naming it is a pair this inert slot added
+  const NAMED = "could not score on a hue ground";
+  const rest = out.split("\n").filter((l) => !l.includes(NAMED)).join("\n");
+  expect("a carrier on an undeclared hue slot adds no pair", !rest.includes("--hue-2"), lineOf(rest, "--hue-2"));
+  expect("and names the slot it could not score, rather than skipping it with no line",
+    notes(out, NAMED) && lineOf(out, NAMED).includes("data-hue-bar=2 (--hue-2 undeclared)"), lineOf(out, NAMED) || "no such note");
 }
 {
   // THE LIST DECAYING IS A FINDING: a spine component shipping a carrier attribute no
@@ -632,8 +656,8 @@ export const Page = () => <Section tone="paper" hue={1}>body</Section>;
 }
 {
   // the tier-card precedent is held to the same rule
-  const fx = build("bar-grounds", { spineCss: SPINE_CSS.replace('.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }',
-    '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); background: var(--hue-1); }') });
+  const fx = build("bar-grounds", { spineCss: SPINE_CSS.replace('.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }',
+    '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); background: var(--hue-1); }') });
   const out = run(fx);
   expect("[2] FAILS a data-hue-bar block that grounds", lineOf(out, "set a ground or an ink").includes('.tier-card[data-hue-bar="1"] sets background') && fails(out, "set a ground or an ink"), lineOf(out, "set a ground"));
 }
@@ -1045,7 +1069,79 @@ const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="
   expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no dist/client to read"), lineOf(run(fx, { args: ["--ci"] }), "dist/client"));
 }
 
-// ---- C17. the nav item variant, SPOTLIGHT (plan-nav-variant U1, D7): declared, then enforced -----
+// ---- C17. W-tier: the tier icon reads its slot's own ink through --tier-ink ---------------------
+// The base fixture's --hue-1 (#e6f0ff) is a LIGHT hue that declares --hue-1-ink (#143a6b): the slot's
+// own ink clears at 9.89, where --on-dark (#ffffff) reads 1.15. The control composes ONE TierCard on
+// hue 1 in the shipped shape; each plant is one mutation that makes the icon fall back to --on-dark
+// on that light hue, and each must go red.
+const TIER1 = `export const Route = { head: () => ({ title: "Home" }) };
+export const Page = () => <Section tone="paper"><TierCard hue={1}>plan</TierCard></Section>;
+`;
+const BAR1 = '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }';
+const ICON = ".tier-card .tier-ico on data-hue-bar=1";
+const UNSCORED = "hue carrier slot(s) composed in the markup that [2] could not score on a hue ground";
+{
+  // GREEN CONTROL: the icon is scored in the slot's own ink, through --tier-ink, and passes
+  const out = run(build("tier-ink-control", { indexTsx: TIER1 }));
+  expect("[2] scores the tier icon in --hue-1-ink on a light --hue-1 through --tier-ink, and passes",
+    passes(out, `--hue-1-ink on --hue-1 [${ICON} (--tier-bar; ink --tier-ink -> --hue-1-ink)] = 9.89`), lineOf(out, `[${ICON}`));
+  // REGRESSION GUARD, not a control on its own: main scored nothing on this ground at all
+  expect("and scores no --on-dark on that hue", !failsAny(out, "--on-dark on --hue-1"), verdicts(out, "FAIL").join(" | "));
+  // GREEN CONTROL for the two plants at the end of this case, and a REGRESSION GUARD (#26's head
+  // named no slot at all): a slot it scores is not named unscored
+  expect("and names no composed slot it could not score", !out.includes(UNSCORED), lineOf(out, UNSCORED));
+}
+{
+  // PLANT, and a REGRESSION GUARD: the icon paints --on-dark directly, the spine before the W-tier
+  // ruling, which main scored the same way
+  const out = run(build("tier-ink-hardcoded", { indexTsx: TIER1,
+    spineCss: SPINE_CSS.replace("color: var(--tier-ink, var(--on-dark)); }", "color: var(--on-dark); }") }));
+  expect("[2] FAILS an icon painted --on-dark on a light hue",
+    failsAny(out, `--on-dark on --hue-1 [${ICON} (--tier-bar)] = 1.15`), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // PLANT: the slot's block sets no --tier-ink, so the icon falls back to --on-dark
+  const out = run(build("tier-ink-unset", { indexTsx: TIER1,
+    spineCss: SPINE_CSS.replace(BAR1, '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }') }));
+  expect("[2] FAILS a slot whose block sets no --tier-ink",
+    failsAny(out, `--on-dark on --hue-1 [${ICON} (--tier-bar)] = 1.15`), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // PLANT: the skin declares the light hue and no ink, so --tier-ink falls through to --on-dark
+  const out = run(build("tier-ink-undeclared", { indexTsx: TIER1, tokens: TOKENS.replace("  --hue-1-ink: #143a6b;\n", "") }));
+  expect("[2] FAILS a light hue declared with no ink, and names the fallback route",
+    failsAny(out, `--on-dark on --hue-1 [${ICON} (--tier-bar; ink --tier-ink -> --on-dark)] = 1.15`), verdicts(out, "FAIL").join(" | "));
+}
+{
+  // CONTROL: the ground property is read from the slot itself, so a block that sets --tier-ink
+  // before --tier-bar is still scored rather than taking --tier-ink for the ground and adding no pair
+  const out = run(build("tier-ink-first", { indexTsx: TIER1,
+    spineCss: SPINE_CSS.replace(BAR1, '.tier-card[data-hue-bar="1"] { --tier-ink: var(--hue-1-ink, var(--on-dark)); --tier-bar: var(--hue-1, var(--accent)); }') }));
+  expect("[2] scores the icon whichever property the slot's block sets first",
+    passes(out, `--hue-1-ink on --hue-1 [${ICON} (--tier-bar; ink --tier-ink -> --hue-1-ink)] = 9.89`), lineOf(out, "hue carriers beyond"));
+}
+// FOLDED from the code review of #26 (F2): the bar and the ink fall back independently, so a skin
+// that declares --hue-1-ink and NOT --hue-1 paints that ink on the --accent fallback (#143a6b on
+// #b34700, 2.07), a pair the carrier loop cannot score. Each plant must be NAMED in a note, where
+// #26's head skipped the slot with no line at all.
+{
+  // PLANT: the ink declared, the hue not
+  const out = run(build("tier-ink-orphan", { indexTsx: TIER1, tokens: TOKENS.replace("  --hue-1: #e6f0ff;\n", "") }));
+  expect("[2] names a composed slot whose hue is undeclared and whose block still reads the declared ink",
+    notes(out, UNSCORED) && lineOf(out, UNSCORED).includes("data-hue-bar=1 (--hue-1 undeclared; its block still reads the declared --hue-1-ink,"),
+    lineOf(out, UNSCORED) || "no such note");
+}
+{
+  // PLANT: the slot's block grounds on a name that is not the slot itself, which the ground match
+  // (`var(--hue-N,` or `var(--hue-N)`) reads as no ground at all
+  const out = run(build("tier-ink-offslot", { indexTsx: TIER1,
+    spineCss: SPINE_CSS.replace(BAR1, '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1-soft, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }') }));
+  expect("[2] names a composed slot whose block grounds on no var(--hue-N)",
+    notes(out, UNSCORED) && lineOf(out, UNSCORED).includes("data-hue-bar=1 (its block grounds on no var(--hue-1)"),
+    lineOf(out, UNSCORED) || "no such note");
+}
+
+// ---- C18. the nav item variant, SPOTLIGHT (plan-nav-variant U1, D7): declared, then enforced -----
 // The fixture spine carries the variant's rules in the shipped spine.css's shape (the item's colour on
 // its background-color; the header's colour on the background-color of the :has() holding the item)
 // and the two header marks that keep --accent, and its header component writes data-variant. IN USE is
@@ -1195,7 +1291,7 @@ const { "--nav-spotlight-header-bg": _hb, ...NO_HEADER_BG } = SLOTS;
   expect("and the real verify.mjs fails the same tree", spotFails(run(fx)).length > 0);
 }
 
-// ---- C17, FOLDED from the code review of PR #28 (F1, F2, F3, F5, F6), each with a plant and a control
+// ---- C18, FOLDED from the code review of PR #28 (F1, F2, F3, F5, F6), each with a plant and a control
 // F1: the header's ink rule is joined to the :has() ground it lies on by selector. A ground that parsed
 // beside an ink that did not left the header's two slots unrequired and unscored at VERIFY: PASS, and
 // one space taken out of one :has() was enough to un-join them.
@@ -1307,9 +1403,11 @@ console.log("carriers R120, C11 [10] phone menu R125), and the fold of #24's rev
 console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview card and og:locale R221), and brief W14");
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
-console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
-console.log("And brief S-NV U1 (C17 the nav item variant SPOTLIGHT, declared then enforced, D7), and the fold of");
-console.log("#28's review (C17 the parse guard F1, the bar under the hot item F2, D6 held to D4's list F3, the");
+console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2), and brief W-tier");
+console.log("(C17 the tier icon in its slot's own ink through --tier-ink), and the fold of #26's review (C3 and");
+console.log("C17 a composed carrier slot [2] cannot score named in a note, F2).");
+console.log("And brief S-NV U1 (C18 the nav item variant SPOTLIGHT, declared then enforced, D7), and the fold of");
+console.log("#28's review (C18 the parse guard F1, the bar under the hot item F2, D6 held to D4's list F3, the");
 console.log("derived count F4, marks named by the built header F5, one publish directory F6).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }

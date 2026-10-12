@@ -365,15 +365,20 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   background: var(--card-bg, var(--surface)); border: 1px solid var(--line-card, var(--line)); border-radius: var(--radius-lg);
   padding: 30px 24px 26px; box-shadow: var(--shadow); }
 .tier-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--tier-bar, var(--accent)); }
-.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); }
-.tier-card[data-hue-bar="2"] { --tier-bar: var(--hue-2, var(--accent)); }
-.tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); }
-.tier-card[data-hue-bar="4"] { --tier-bar: var(--hue-4, var(--accent)); }
-.tier-card[data-hue-bar="5"] { --tier-bar: var(--hue-5, var(--accent)); }
-.tier-card[data-hue-bar="6"] { --tier-bar: var(--hue-6, var(--accent)); }
+/* The icon reads its slot's OWN ink. Each slot sets --tier-ink to --hue-N-ink beside --tier-bar,
+   and .tier-ico paints var(--tier-ink, var(--on-dark)), so a light hue that declares a dark ink
+   carries that ink rather than --on-dark, which measured 1.72, 1.33 and 2.06 on zuidgeluid-site's
+   hues 1 to 3. --on-dark stays the fallback where a skin declares the hue and no ink. verify.mjs
+   [2] scores the icon through --tier-ink on every slot the markup composes. */
+.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="2"] { --tier-bar: var(--hue-2, var(--accent)); --tier-ink: var(--hue-2-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="3"] { --tier-bar: var(--hue-3, var(--accent)); --tier-ink: var(--hue-3-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="4"] { --tier-bar: var(--hue-4, var(--accent)); --tier-ink: var(--hue-4-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="5"] { --tier-bar: var(--hue-5, var(--accent)); --tier-ink: var(--hue-5-ink, var(--on-dark)); }
+.tier-card[data-hue-bar="6"] { --tier-bar: var(--hue-6, var(--accent)); --tier-ink: var(--hue-6-ink, var(--on-dark)); }
 .tier-card .tier-ico { width: 46px; height: 46px; border-radius: 50%; display: flex;
   align-items: center; justify-content: center; background: var(--tier-bar, var(--accent));
-  color: var(--on-dark); }
+  color: var(--tier-ink, var(--on-dark)); }
 .tier-card .tier-ico svg { width: 22px; height: 22px; }
 .tier-card .label { font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
 .tier-card .price small { display: block; font-family: var(--font-body); font-weight: 500; font-size: 12px; color: var(--text-soft); margin-top: 6px; }
