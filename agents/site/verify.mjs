@@ -428,10 +428,111 @@ function skinMaps(css) {
   }
   return { T: Object.assign(T, ownT), TA: Object.assign(TA, ownTA), declared, unread };
 }
+// THE NAV ITEM VARIANT, SPOTLIGHT (plan-nav-variant U1, D7). A top-level NavItem may carry
+// `variant: "spotlight"`, which chrome.tsx writes as data-variant on the item's own <a>, and spine.css
+// styles it from slots the skin declares: the item's own ink and ground, and the whole header's ink
+// and ground while the item is hot. Each slot's var() carries a fallback, which sanctions the name
+// for (d2) and keeps a site that sets nothing rendering as it did, but a fallback cannot reproduce
+// each header element's own rest ink, and a half-declared pair paints an ink on a ground nobody
+// scored (measured in the plan's render: 2.20 against 4.5). So once the variant is IN USE every slot
+// those rules pair is REQUIRED as an opaque colour, and each pair is scored.
+//
+// IN USE IS THE RENDERED FACT, NOT THE SOURCE: data-variant="spotlight" on an <a> in any prerendered
+// page of the directory the host publishes (netlify.toml's `publish`, `dist/client` where none is
+// set, as [11] reads it). The header renders on every page, so any one page answers, and the gate
+// workflow builds in the step before this one. A text match on `variant: "spotlight"` in the content
+// would miss `const V = "spotlight" as const` then `variant: V`, which tsc passes; a read of
+// chrome.tsx would fire on every site, the spine being byte-identical everywhere. With no built page
+// to read it is NOT DECIDED, and says so as soft(): a warning locally, a failure under --ci.
+//
+// THE PAIRS ARE READ OUT OF spine.css, NONE IS NAMED HERE, the way the tone map is. The item's pair
+// is the `color` and `background-color` of the rule whose subject is the variant's <a>. The header's
+// pair is the `color` of the rule that reaches into a `:has()` holding the variant, laid on the
+// `background-color` of the rule whose subject is that `:has()` itself. The header marks that keep
+// their own token through the hot header (HEADER_MARKS, a list a stranger can extend) are scored on
+// the header's ground at 3.0, in the shape of ACCENT_LARGE_PAIRS: the logo's dot is large text and the
+// current-page bar a non-text indicator (WCAG 1.4.11).
+const HEADER_MARKS = [
+  { selector: ".logo .dot",       prop: "color",      what: "the logo's dot" },
+  { selector: ".nav a.on::after", prop: "background", what: "the current-page bar" },
+];
+const SPOTLIGHT = (() => {
+  const css = stripComments(read(P.spineCss) || "");
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ sel: m[1].trim().replace(/\s+/g, " "), body: m[2] }));
+  const firstVar = (body, prop) => (body.match(new RegExp("(?:^|[;\\s])" + prop + "\\s*:\\s*var\\(\\s*(--[\\w-]+)")) || [])[1] || null;
+  const VARIANT = /\[data-variant=["']?spotlight["']?\]/;
+  // split a selector at its first :has(...), balancing the parentheses its argument holds
+  const atHas = (sel) => {
+    const i = sel.indexOf(":has(");
+    if (i < 0) return null;
+    let depth = 0, j = i + 4;
+    for (; j < sel.length; j++) { if (sel[j] === "(") depth++; else if (sel[j] === ")" && --depth === 0) break; }
+    return { owner: sel.slice(0, j + 1), arg: sel.slice(i + 5, j), after: sel.slice(j + 1).trim() };
+  };
+  const pairs = [];   // [ink, ground, what, threshold]
+  const variantRules = rules.filter((r) => VARIANT.test(r.sel));
+  for (const r of variantRules) {
+    if (atHas(r.sel)) continue;
+    const ink = firstVar(r.body, "color"), ground = firstVar(r.body, "background-color");
+    if (ink && ground) pairs.push([ink, ground, "the hot item", 4.5]);
+  }
+  const headerGround = [];   // { owner, ground }
+  for (const r of variantRules) {
+    const h = atHas(r.sel);
+    if (h && VARIANT.test(h.arg) && !h.after && firstVar(r.body, "background-color")) headerGround.push({ owner: h.owner, ground: firstVar(r.body, "background-color") });
+  }
+  for (const r of variantRules) {
+    const h = atHas(r.sel);
+    if (!h || !h.after || !firstVar(r.body, "color")) continue;
+    const g = headerGround.filter((x) => x.owner === h.owner).pop();
+    if (g) pairs.push([firstVar(r.body, "color"), g.ground, "the hot header's logo, top-level links and member link", 4.5]);
+  }
+  const ground = (headerGround[headerGround.length - 1] || {}).ground || null;
+  if (ground) {
+    const byToken = new Map();
+    for (const m of HEADER_MARKS) {
+      const r = rules.filter((x) => x.sel.split(",").map((s) => s.trim()).includes(m.selector) && firstVar(x.body, m.prop)).pop();
+      const tok = r && firstVar(r.body, m.prop);
+      if (tok) byToken.set(tok, [...(byToken.get(tok) || []), m.what]);
+    }
+    for (const [tok, whats] of byToken) pairs.push([tok, ground, `${whats.join(" and ")} on the hot header`, 3.0]);
+  }
+  const required = [...new Set(pairs.filter((p) => p[3] === 4.5).flatMap((p) => [p[0], p[1]]))];
+  const spineWrites = walk(P.spineDir, [".tsx", ".ts", ".jsx", ".js"]).some((f) => /\bdata-variant\s*=/.test(stripComments(read(f) || "")));
+  if (!variantRules.length && !spineWrites) {
+    note(`nav variant: the spine carries no data-variant rule and writes none, so no spotlight pair is derived (D7)`);
+    return { state: "absent", pairs, required };
+  }
+  if (spineWrites && (!pairs.some((p) => p[2] === "the hot item") || !headerGround.length))
+    bad(`nav variant: a spine component writes data-variant but spine.css's [data-variant="spotlight"] rules parse to ` +
+      `${pairs.length ? "an incomplete set" : "nothing"} (the item's color on its background-color, and the header's color ` +
+      `on the background-color of the :has() that holds the item), so no pair a site sets can be scored (D7)`);
+  const toml = read(join(ROOT, "netlify.toml")) || "";
+  const publish = ((toml.match(/^\s*publish\s*=\s*["']([^"']+)["']/m) || [])[1] || "dist/client").replace(/^\.?\/+|\/+$/g, "");
+  const pages = walk(join(ROOT, publish), [".html"]);
+  if (!pages.length) {
+    soft(`nav variant: no prerendered page in ${publish} to read, so whether a nav item carries data-variant="spotlight" ` +
+      `is NOT DECIDED and its required slot(s) ${required.join(", ")} are not checked: build first (the gate workflow ` +
+      `builds in the step before this one) (D7)`);
+    return { state: "undecided", pairs, required };
+  }
+  const using = pages.filter((f) => /<a\b[^>]*?\sdata-variant=(?:"spotlight"|'spotlight'|spotlight\b)/.test(read(f) || ""));
+  const spotlightUsed = using.length > 0;
+  if (!spotlightUsed) {
+    note(`nav variant "spotlight": not in use on any of ${pages.length} prerendered page(s) in ${publish}, so its ` +
+      `slot(s) are not required and no pair is derived (D7)`);
+    return { state: "unused", pairs, required };
+  }
+  note(`nav variant "spotlight": IN USE on ${using.length} of ${pages.length} prerendered page(s) in ${publish} ` +
+    `(${relative(ROOT, using[0]).replace(/\\/g, "/")}${using.length > 1 ? ", ..." : ""}), so ${required.join(", ")} ` +
+    `are required as opaque colours and ${pairs.length} pair(s) read out of spine.css are asserted (D7)`);
+  return { state: "used", pairs, required };
+})();
+const BASE_DECLARED = new Set([...(TOKEN_BLOCKS.base).matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
 // THE MATRIX, AS A FUNCTION OF THE SKIN. Everything from here to its closing brace is the [2] that
 // ran once over the flat map; it now runs once for the base and once for each skin, with the
 // reporters passed in so a skin's lines can carry its name.
-function aaMatrix(T, TA, { ok, bad, soft, note }) {
+function aaMatrix(T, TA, { ok, bad, soft, note }, declared = BASE_DECLARED) {
   const hexOf = (n) => "#" + [n.r, n.g, n.b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
   function flattenOver(name, groundHex) {
     const c = TA[name];
@@ -1160,6 +1261,53 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
     else ok(`${fg} on ${bg} (accent tone) = ${ratio.toFixed(2)} (>= ${threshold}${accentSmallText ? "" : " large-only"})`);
   }
   if (accentSmallText) note("an accent-tone section appears to carry small text -- accent checked at 4.5, not the large-only 3.0");
+  // THE NAV ITEM VARIANT'S PAIRS (D7), on this map. Only where a built page carries the variant
+  // (SPOTLIGHT above): then each slot its rules pair is REQUIRED as an opaque colour, named when it is
+  // not, and each pair is scored. A HALF-DECLARED pair is a FAIL here, never the silent skip the loops
+  // above take for an undeclared ink, because the hot rule then paints the declared side on whatever
+  // the fallback leaves (gold on the header's own ground measured 2.20). The pairs join the
+  // denominator only in use, the 3.0 pair as ACCENT_LARGE_PAIRS does. Not in use, a declared slot is
+  // named and not asserted, the shape of an uncomposed hue.
+  const spotlightSlots = [...declared].filter((n) => n.startsWith("--nav-spotlight-")).sort();
+  if (SPOTLIGHT.state === "used") {
+    for (const slot of SPOTLIGHT.required) {
+      if (T[slot]) continue;
+      const why = !declared.has(slot) ? "is not declared"
+        : TA[slot] ? "is declared translucent, and [2] cannot score what shows through it"
+        : "is declared with a value [2] cannot read as a colour";
+      bad(`nav variant "spotlight" is in use, so ${slot} is required as an opaque colour in tokens.css, and it ${why} (D7)`);
+    }
+    let checked = 0;
+    for (const [fg, bg, what, threshold] of SPOTLIGHT.pairs) {
+      derivedPairs++;
+      const label = `${fg} on ${bg} [nav variant "spotlight": ${what}]`;
+      const bgHex = T[bg];
+      const fgHex = bgHex && resolveColour(fg, bgHex);
+      if (!bgHex || !fgHex) {
+        // a required slot that is missing or unreadable is named above; what is left to say is a pair
+        // with one slot declared and the other not, and any other token this map cannot resolve
+        const has = (n) => declared.has(n), req = (n) => SPOTLIGHT.required.includes(n);
+        if (req(fg) && req(bg) && has(fg) !== has(bg)) bad(`${label} is HALF-DECLARED: ${has(fg) ? fg : bg} is declared and ` +
+          `${has(fg) ? bg : fg} is not, so the hot rule paints it on a fallback no pair scores (D7)`);
+        else if (!bgHex) { if (has(bg) && !req(bg)) skippedTokens.add(bg); }
+        else if (has(fg) && !req(fg)) skippedTokens.add(fg);
+        continue;
+      }
+      const flat = !T[fg];
+      if (flat) flattenedPairs++;
+      aaChecked++;
+      checked++;
+      assertedKeys.add(`${fg}|${bg}`);
+      const ratio = cr(fgHex, bgHex);
+      const lbl = `${label}${flat ? ` (rgba flattened over the ground -> ${fgHex})` : ""}`;
+      if (ratio < threshold) bad(`${lbl} = ${ratio.toFixed(2)} (< ${threshold.toFixed(1)}${threshold < 4.5 ? " large / non-text" : " normal"})`);
+      else ok(`${lbl} = ${ratio.toFixed(2)}${threshold < 4.5 ? ` (>= ${threshold.toFixed(1)} large / non-text)` : ""}`);
+    }
+    note(`nav variant "spotlight": ${SPOTLIGHT.pairs.length} pair(s) derived and ${checked} asserted on this map, ` +
+      `each counted in the denominator line below (D7)`);
+  } else if (spotlightSlots.length) {
+    note(`nav variant "spotlight" slot(s) declared but not asserted, the variant being ${SPOTLIGHT.state === "undecided" ? "NOT DECIDED (no built page)" : "in use on no built page"}: ${spotlightSlots.join(", ")} (D7)`);
+  }
   // NON-TEXT CONTRAST, 3.0: THE FORM FIELD EDGE (R121, WCAG 1.4.11). A field's 2px edge is the only
   // thing that shows where the control is, so it owes 3.0 against the FIELD it bounds and against
   // the CARD the field sits in. The spine drew it in --line, the rule-and-divider token, and nothing
@@ -1267,7 +1415,8 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
       if (kind === "bad") failed++;
       fn(tag + m);
     };
-    const r = aaMatrix(s.T, s.TA, { ok: ownLine(ok, "ok"), bad: ownLine(bad, "bad"), soft: ownLine(soft, "soft"), note: ownLine(note, "note") });
+    const r = aaMatrix(s.T, s.TA, { ok: ownLine(ok, "ok"), bad: ownLine(bad, "bad"), soft: ownLine(soft, "soft"), note: ownLine(note, "note") },
+      new Set([...BASE_DECLARED, ...s.declared]));
     if (s.unread.length) note(`${tag}colour token(s) declared with a value [2] cannot read, so they are dropped from this ` +
       `skin's map rather than scored at the base value: ${s.unread.join(", ")}`);
     note(`${tag}${skin.selector} scored as its own map over the base :root (${s.declared.size} token(s) declared ` +

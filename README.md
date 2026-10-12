@@ -237,9 +237,43 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
   nothing: a warning locally, a failure under `--ci`. The gate workflow builds in the step before the
   gate, so CI always has one.
 
+### What `[2]` gained on 2026-10-12 (brief S-NV U1, the nav item variant)
+
+Each one has a planted negative and a green control in `verify.selftest.mjs` (C17).
+
+- **The spotlight variant, declared then enforced (plan-nav-variant D7).** A nav item that carries
+  `variant: "spotlight"` is IN USE when a prerendered page in the publish directory (as `[11]` reads
+  it) has `data-variant="spotlight"` on an `<a>`. The build is the operand, not the source, so a
+  variant set through a constant is seen. In use, every slot the spine's spotlight rules pair is
+  required as an opaque colour and named when it is not; a pair with one slot declared FAILS as
+  half-declared rather than being skipped; and three pairs are read out of `spine.css` and scored:
+  the item's ink on its ground and the hot header's ink on its ground at 4.5, and `--accent` (the
+  logo's dot and the current-page bar, `HEADER_MARKS`) on the hot header's ground at 3.0. They join
+  the AA denominator only in use, the 3.0 pair as `ACCENT_LARGE_PAIRS` does, so a site that sets no
+  variant reads the same denominator as before. Not in use, declared slots are named and not
+  asserted. With no built page it is NOT DECIDED: a warning locally, a failure under `--ci`.
+
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief S-NV U1: one declared per-item nav variant in the spine)
+
+Two spine files move, `src/components/spine/chrome.tsx` and `src/styles/spine.css`. The Factory
+re-embeds both with W13's `spine.css` at the next site-contract cut (plan job K1, plan-nav-variant
+U2), and each site takes them at its resync. A site that sets no variant renders the markup it
+rendered before.
+
+- **`NavItem.variant`** (D1, D2) A top-level nav item may carry `variant: "spotlight"`, the one
+  member tsc admits, and `SiteHeader` writes it as `data-variant` on the item's own `<a>`, as a leaf
+  and as a dropdown parent.
+- **The spotlight rules** (D3, D4, D6) On hover or keyboard focus the item takes
+  `--nav-spotlight-ink` on `--nav-spotlight-bg`, at every width. On a desktop pointer the whole
+  header takes `--nav-spotlight-header-bg`, and its logo, top-level links and member link
+  `--nav-spotlight-header-ink`, through `:has()`, no script. A header that carries the item does not
+  transition its text's colour. `--nav-spotlight-glow`, `--nav-spotlight-halo` and
+  `--nav-spotlight-wash` are optional and default to none. No pulse and no scale (plan OA1).
+- **`[2]` requires and scores them** (D5, D7) as the section above says.
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 

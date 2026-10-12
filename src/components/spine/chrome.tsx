@@ -10,7 +10,13 @@ import * as React from "react";
 // being an `import type`, this becomes a real cycle and the wiring has to move.
 import { privacy } from "../../content/site.config";
 
-export type NavItem = { label: string; href: string; children?: { label: string; href: string }[] };
+// `variant` is ONE declared per-item value, on a top-level item only (a child takes none). Its one
+// member is the whole vocabulary, so tsc refuses any other name a site writes. It renders as
+// data-variant on the item's own <a>, and spine.css styles it from slots the skin declares in
+// tokens.css; verify.mjs [2] requires and scores those slots once a built page carries it. An
+// item that sets none renders the markup it rendered before, because React omits an undefined
+// attribute.
+export type NavItem = { label: string; href: string; variant?: "spotlight"; children?: { label: string; href: string }[] };
 export type FooterColumn = { title: string; links: { label: string; href: string }[] };
 export type Social = { label: string; href: string; icon: React.ReactNode };
 
@@ -54,13 +60,13 @@ export function SiteHeader(
           {nav.map((item) =>
             item.children ? (
               <div className="navitem" key={item.href}>
-                <a href={item.href} className={isOn(item.href) ? "on" : ""} aria-haspopup="true">{item.label} ▾</a>
+                <a href={item.href} className={isOn(item.href) ? "on" : ""} data-variant={item.variant} aria-haspopup="true">{item.label} ▾</a>
                 <div className="submenu">
                   {item.children.map((c) => <a key={c.href} href={c.href}>{c.label}</a>)}
                 </div>
               </div>
             ) : (
-              <a key={item.href} href={item.href} className={isOn(item.href) ? "on" : ""}>{item.label}</a>
+              <a key={item.href} href={item.href} className={isOn(item.href) ? "on" : ""} data-variant={item.variant}>{item.label}</a>
             )
           )}
         </nav>

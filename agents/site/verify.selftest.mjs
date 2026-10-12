@@ -41,6 +41,16 @@
 // same path named and not failed, beside a rewrite that still fails (F2). Run against #25's head
 // before the fold, 7 of these 9 assertions FAIL; the two that hold there are marked REGRESSION GUARD.
 //
+// EXTENDED 2026-10-12 (brief S-NV U1, plan-nav-variant U1) by the check THAT run added: C17 the nav item
+// variant SPOTLIGHT, declared and then enforced (D7). In use is read from the built page, a variant set
+// through a constant included; the four slots its rules pair are required as opaque colours; a
+// half-declared pair FAILS rather than being skipped; --accent is scored at 3.0 on the hot header's
+// ground for the logo's dot and the current-page bar; a skin is scored in its own pass; an unbuilt tree
+// is NOT DECIDED; a spine whose rules parse to nothing FAILS; one control parses the SHIPPED spine.css;
+// and a MUTANT NEGATIVE CONTROL, the rendered-fact predicate removed, turns the absent-slot plant green.
+// Run against the verify.mjs of main before that run, 19 of these 21 assertions FAIL; the two that hold
+// there are the fixture's own literal guard and the mutant's green, main carrying no such check at all.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -60,7 +70,7 @@
 // Usage: node agents/site/verify.selftest.mjs
 //   exit 0 = every case behaved as specified | exit 1 = a case did not
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -193,7 +203,7 @@ function build(name, mut = {}) {
   // about the mutation rather than about the spine.
   for (const base of [site, seed]) {
     put(base, "src/styles/spine.css", mut.spineCss ?? SPINE_CSS);
-    put(base, "src/components/spine/index.tsx", SPINE_TSX);
+    put(base, "src/components/spine/index.tsx", mut.spineTsx ?? SPINE_TSX);
   }
   put(site, "src/styles/tokens.css", mut.tokens ?? TOKENS);
   put(site, "src/content/site.config.tsx", mut.config ?? CONFIG);
@@ -208,8 +218,8 @@ function build(name, mut = {}) {
   return { site, seed };
 }
 
-function run(fx, { args = [], env = {} } = {}) {
-  const argv = [VERIFY, fx.site, "--seed", fx.seed, ...args];
+function run(fx, { args = [], env = {}, verify = VERIFY } = {}) {
+  const argv = [verify, fx.site, "--seed", fx.seed, ...args];
   try {
     return execFileSync(process.execPath, argv, {
       env: { ...process.env, CI: "", GITHUB_REPOSITORY: "", SEED_REPO: "", ...env },
@@ -1024,6 +1034,138 @@ const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="
   expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no dist/client to read"), lineOf(run(fx, { args: ["--ci"] }), "dist/client"));
 }
 
+// ---- C17. the nav item variant, SPOTLIGHT (plan-nav-variant U1, D7): declared, then enforced -----
+// The fixture spine carries the variant's rules in the shipped spine.css's shape (the item's colour on
+// its background-color; the header's colour on the background-color of the :has() holding the item)
+// and the two header marks that keep --accent, and its header component writes data-variant. IN USE is
+// read from the build, so each case writes the prerendered page it needs under dist/client.
+const SPOT_CSS = SPINE_CSS + `.logo .dot { color: var(--accent); }
+.nav a.on::after { content: ""; background: var(--accent); }
+.nav a[data-variant="spotlight"]:is(:hover, :focus-visible) { color: var(--nav-spotlight-ink, var(--accent-text)); background-color: var(--nav-spotlight-bg, transparent); text-shadow: var(--nav-spotlight-glow, none); }
+@media (hover: hover) and (min-width: 901px) {
+  .header:has(.nav a[data-variant="spotlight"]:is(:hover, :focus-visible)) { background-color: var(--nav-spotlight-header-bg, var(--bg)); background-image: var(--nav-spotlight-wash, none); }
+  .header:has(.nav a[data-variant="spotlight"]:is(:hover, :focus-visible))
+    :is(.logo, .member-link, .nav > a, .navitem > a):not([data-variant]) { color: var(--nav-spotlight-header-ink, var(--text)); }
+}
+.header:has(.nav a[data-variant="spotlight"]) :is(.logo, .member-link, .nav > a, .navitem > a) { transition: none; }
+`;
+const SPOT_TSX = SPINE_TSX + `export function SiteHeader({ nav }) {
+  return <header className="header"><nav className="nav">{nav.map((i) => <a key={i.href} href={i.href} data-variant={i.variant}>{i.label}</a>)}</nav></header>;
+}
+`;
+// the four required slots, every pair clearing: orange on navy 7.52 (the item), gold on night 8.56
+// (the hot header), and the fixture's --accent #b34700 on night 3.74 (the dot and the bar)
+const SLOTS = { "--nav-spotlight-bg": "#0b0583", "--nav-spotlight-ink": "#ff9f2f",
+  "--nav-spotlight-header-bg": "#000020", "--nav-spotlight-header-ink": "#d19e57" };
+const withSlots = (slots) => TOKENS.replace("}", Object.entries(slots).map(([k, v]) => `  ${k}: ${v};\n`).join("") + "}");
+const BUILT = (variant) => `<!doctype html><html lang="en"><body><header class="header"><nav class="nav"><a href="/">Home</a>` +
+  `<a href="/nacht"${variant ? ' data-variant="spotlight"' : ""}>De Nacht</a></nav></header><main id="main"></main></body></html>\n`;
+const spot = (name, { slots = SLOTS, built = true, extra = {}, ...mut } = {}) => build(name, { spineCss: SPOT_CSS, spineTsx: SPOT_TSX,
+  tokens: withSlots(slots), ...mut, files: { ...(built === null ? {} : { "dist/client/index.html": BUILT(built) }), ...extra } });
+const spotFails = (out) => verdicts(out, "FAIL").filter((l) => l.includes("nav variant") || l.includes("--nav-spotlight-"));
+const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) derived, (\d+) asserted/) || []).slice(1).map(Number);
+{
+  // CONTROL: in use with all four slots declared and clearing. Against the same fixture with the
+  // variant on no built page, three more pairs are derived and three more asserted: the two 4.5 pairs
+  // and the 3.0 pair, which joins the derived count as ACCENT_LARGE_PAIRS does on this verify.mjs.
+  const used = run(spot("spot-control"));
+  const [d1, a1] = den(used), [d0, a0] = den(run(spot("spot-control-unused", { built: false })));
+  expect("[2] reads the variant IN USE from the built page", notes(used, 'nav variant "spotlight": IN USE on 1 of 1 prerendered page(s)'), lineOf(used, "IN USE"));
+  expect("and asserts its three pairs, failing none", passes(used, '--nav-spotlight-ink on --nav-spotlight-bg [nav variant "spotlight": the hot item] = 7.52') &&
+    passes(used, "--nav-spotlight-header-ink on --nav-spotlight-header-bg [nav variant \"spotlight\": the hot header's logo, top-level links and member link] = 8.56") &&
+    passes(used, "--accent on --nav-spotlight-header-bg [nav variant \"spotlight\": the logo's dot and the current-page bar on the hot header] = 3.74 (>= 3.0 large / non-text)") &&
+    !spotFails(used).length, verdicts(used, "PASS").filter((l) => l.includes("spotlight")).join(" | ") + " | " + spotFails(used).join(" | "));
+  expect("and three more pairs are derived and three more asserted than with the variant unused", d1 - d0 === 3 && a1 - a0 === 3, `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1}`);
+}
+{
+  // CONTROL, against the SHIPPED spine.css, so the real rules are what parse: the same three pairs.
+  // Other lines of the shipped spine are not this case's; only the deltas and the spotlight lines are.
+  const real = readFileSync(join(HERE, "../../src/styles/spine.css"), "utf8");
+  const used = run(spot("spot-shipped", { spineCss: real }));
+  const [d1, a1] = den(used), [d0, a0] = den(run(spot("spot-shipped-unused", { spineCss: real, built: false })));
+  expect("the shipped spine.css parses to the same three pairs, each asserted", d1 - d0 === 3 && a1 - a0 === 3 &&
+    ["the hot item] = 7.52", "member link] = 8.56", "current-page bar on the hot header] = 3.74"].every((t) => verdicts(used, "PASS").some((l) => l.includes(t))),
+    `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1} | ` + verdicts(used, "PASS").filter((l) => l.includes("spotlight")).join(" | "));
+}
+const { "--nav-spotlight-header-bg": _hb, ...NO_HEADER_BG } = SLOTS;
+{
+  // PLANT: in use with --nav-spotlight-header-bg absent
+  const out = run(spot("spot-no-header-bg", { slots: NO_HEADER_BG }));
+  expect("[2] FAILS the variant in use without --nav-spotlight-header-bg, and names it",
+    fails(out, "so --nav-spotlight-header-bg is required as an opaque colour in tokens.css, and it is not declared"), spotFails(out).join(" | "));
+  expect("and FAILS the header pair as half-declared rather than skipping it",
+    failsAny(out, "--nav-spotlight-header-ink on --nav-spotlight-header-bg [nav variant \"spotlight\": the hot header's logo, top-level links and member link] is HALF-DECLARED"), spotFails(out).join(" | "));
+}
+{
+  // PLANT: only --nav-spotlight-header-ink declared, the state the plan's render measured painting
+  // gold on the header's own ground at 2.20
+  const out = run(spot("spot-ink-only", { slots: { "--nav-spotlight-header-ink": "#d19e57" } }));
+  expect("[2] FAILS a half-declared header pair", failsAny(out, "is HALF-DECLARED: --nav-spotlight-header-ink is declared and --nav-spotlight-header-bg is not"), spotFails(out).join(" | "));
+  expect("and names each of the three missing slots", ["--nav-spotlight-bg", "--nav-spotlight-ink", "--nav-spotlight-header-bg"].every((s) =>
+    fails(out, `so ${s} is required as an opaque colour in tokens.css, and it is not declared`)), spotFails(out).join(" | "));
+}
+{
+  // PLANT: a required slot declared translucent
+  const out = run(spot("spot-translucent", { slots: { ...SLOTS, "--nav-spotlight-bg": "rgba(0, 0, 32, .6)" } }));
+  expect("[2] FAILS a required slot that is not opaque", fails(out, "so --nav-spotlight-bg is required as an opaque colour in tokens.css, and it is declared translucent"), spotFails(out).join(" | "));
+}
+{
+  // PLANT: --accent under 3.0 on the hot header's ground (#b34700 on navy #0b0583 = 2.80)
+  const out = run(spot("spot-accent", { slots: { ...SLOTS, "--nav-spotlight-header-bg": "#0b0583" } }));
+  expect("[2] FAILS --accent on the hot header's ground under 3.0, naming the dot and the bar",
+    failsAny(out, "--accent on --nav-spotlight-header-bg [nav variant \"spotlight\": the logo's dot and the current-page bar on the hot header] = 2.80 (< 3.0 large / non-text)"), spotFails(out).join(" | "));
+}
+{
+  // PLANT: a skin that lays a light header ground over the base's slots is scored in its own pass
+  const out = run(spot("spot-skin", { tokens: withSlots(SLOTS) + SKIN("  --nav-spotlight-header-bg: #ffffff;") }));
+  expect("[2] FAILS a skin's own spotlight pair, named by the skin",
+    failsAny(out, 'skin "nacht": --nav-spotlight-header-ink on --nav-spotlight-header-bg') && failsAny(out, "= 2.40 (< 4.5"), spotFails(out).join(" | "));
+}
+{
+  // PLANT: content sets the variant through a constant, which tsc passes and a source match on the
+  // literal misses; in use is read from the build, so the missing slots still FAIL
+  const config = CONFIG + `const V = "spotlight" as const;\nexport const nav = [{ label: "De Nacht", href: "/nacht", variant: V }];\n`;
+  const out = run(spot("spot-constant", { slots: {}, config }));
+  expect("the fixture's content carries no `variant: \"spotlight\"` literal", !config.includes('variant: "spotlight"'));
+  expect("[2] reads a variant set through a constant as in use, and FAILS its missing slots",
+    notes(out, 'nav variant "spotlight": IN USE') && fails(out, "so --nav-spotlight-header-bg is required as an opaque colour"), lineOf(out, "nav variant"));
+}
+{
+  // CONTROL: slots declared, the variant on no built page: named, not asserted, nothing fails
+  const out = run(spot("spot-unused", { built: false }));
+  expect("[2] notes declared slots of an unused variant and asserts none", notes(out, 'nav variant "spotlight" slot(s) declared but not asserted, the variant being in use on no built page') &&
+    !spotFails(out).length && !verdicts(out, "PASS").some((l) => l.includes("spotlight")), lineOf(out, "slot(s) declared but not asserted"));
+}
+{
+  // no built page to read is NOT DECIDED: a warning locally and a failure under --ci
+  const fx = spot("spot-unbuilt", { built: null, slots: NO_HEADER_BG });
+  expect("[2] warns that an unbuilt tree cannot decide the variant", warns(run(fx), "nav variant: no prerendered page in dist/client to read"), lineOf(run(fx), "nav variant"));
+  expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "nav variant: no prerendered page in dist/client to read"), lineOf(run(fx, { args: ["--ci"] }), "nav variant"));
+}
+{
+  // PLANT: the spine writes data-variant and its rules parse to nothing
+  const out = run(spot("spot-unparsed", { spineCss: SPINE_CSS }));
+  expect("[2] FAILS a spine that writes data-variant with no rule to score", fails(out, "a spine component writes data-variant but spine.css's [data-variant=\"spotlight\"] rules parse to nothing"), lineOf(out, "nav variant"));
+}
+{
+  // CONTROL: a spine that carries no variant at all derives nothing and says so
+  const out = run(build("spot-absent", {}));
+  expect("[2] notes a spine with no variant and derives no pair", notes(out, "nav variant: the spine carries no data-variant rule and writes none"), lineOf(out, "nav variant"));
+}
+{
+  // MUTANT NEGATIVE CONTROL: verify.mjs with D7(a)'s rendered-fact predicate removed (the variant read
+  // as in use on no page), against the absent-slot plant. The plant goes green under it, so it is the
+  // predicate, not something else in the fixture, that makes the case fire.
+  const src = readFileSync(VERIFY, "utf8"), line = "  const spotlightUsed = using.length > 0;\n";
+  expect("the mutant's target line is in verify.mjs exactly once", src.split(line).length === 2);
+  const mutant = join(ROOT, "verify-mutant-d7a.mjs");
+  writeFileSync(mutant, src.replace(line, "  const spotlightUsed = false;\n"));
+  const fx = spot("spot-mutant", { slots: NO_HEADER_BG });
+  const out = run(fx, { verify: mutant });
+  expect("under the mutant the absent-slot plant goes green", !verdicts(out, "FAIL").length && out.includes("VERIFY: PASS"), verdicts(out, "FAIL").join(" | "));
+  expect("and the real verify.mjs fails the same tree", spotFails(run(fx)).length > 0);
+}
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
@@ -1034,6 +1176,7 @@ console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
 console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
+console.log("And brief S-NV U1 (C17 the nav item variant SPOTLIGHT, declared then enforced, D7).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");
