@@ -51,6 +51,17 @@
 // Run against the verify.mjs of main before that run, 19 of these 21 assertions FAIL; the two that hold
 // there are the fixture's own literal guard and the mutant's green, main carrying no such check at all.
 //
+// FOLDED the same day from the code review of PR #28, each finding with its own plant and control, all
+// in C17: the header's pair joined to its ground with whitespace taken out, and a spine that writes the
+// variant failing unless both pairs parse, planted as the ink rule deleted and as one space taken out
+// of a :has() (F1); the current-page bar under the hot item scored on the item's own ground where a
+// built page has the item as the current page, and named as not derived where none does (F2); D6 held
+// to D4's list at rest, planted deleted, drifted and scoped to the hot state (F3); the IN USE note
+// counting its pairs as derived (F4); a header mark named by what the built header renders (F5); and
+// one reading of the publish directory for [2] and [11] (F6). Run against #28's head before the fold,
+// 13 of these 20 assertions FAIL; the seven that hold there are five plants' own literal guards, the F2
+// plant's other three pairs passing beside it, and F6's, marked REGRESSION GUARD.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -1038,7 +1049,10 @@ const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="
 // The fixture spine carries the variant's rules in the shipped spine.css's shape (the item's colour on
 // its background-color; the header's colour on the background-color of the :has() holding the item)
 // and the two header marks that keep --accent, and its header component writes data-variant. IN USE is
-// read from the build, so each case writes the prerendered page it needs under dist/client.
+// read from the build, so each case writes the prerendered page it needs under dist/client. That page's
+// header carries the logo with its dot and a current-page link, so both marks render (F5 of #28's review
+// names a mark by what the built header renders); `page` sets an image logo or the item as the current
+// page.
 const SPOT_CSS = SPINE_CSS + `.logo .dot { color: var(--accent); }
 .nav a.on::after { content: ""; background: var(--accent); }
 .nav a[data-variant="spotlight"]:is(:hover, :focus-visible) { color: var(--nav-spotlight-ink, var(--accent-text)); background-color: var(--nav-spotlight-bg, transparent); text-shadow: var(--nav-spotlight-glow, none); }
@@ -1058,10 +1072,12 @@ const SPOT_TSX = SPINE_TSX + `export function SiteHeader({ nav }) {
 const SLOTS = { "--nav-spotlight-bg": "#0b0583", "--nav-spotlight-ink": "#ff9f2f",
   "--nav-spotlight-header-bg": "#000020", "--nav-spotlight-header-ink": "#d19e57" };
 const withSlots = (slots) => TOKENS.replace("}", Object.entries(slots).map(([k, v]) => `  ${k}: ${v};\n`).join("") + "}");
-const BUILT = (variant) => `<!doctype html><html lang="en"><body><header class="header"><nav class="nav"><a href="/">Home</a>` +
-  `<a href="/nacht"${variant ? ' data-variant="spotlight"' : ""}>De Nacht</a></nav></header><main id="main"></main></body></html>\n`;
-const spot = (name, { slots = SLOTS, built = true, extra = {}, ...mut } = {}) => build(name, { spineCss: SPOT_CSS, spineTsx: SPOT_TSX,
-  tokens: withSlots(slots), ...mut, files: { ...(built === null ? {} : { "dist/client/index.html": BUILT(built) }), ...extra } });
+const BUILT = (variant, { on = "/", dot = true } = {}) => `<!doctype html><html lang="en"><body><header class="header">` +
+  `<a class="logo" href="/">${dot ? 'AI<span class="dot">·</span>Smith' : '<img src="/logo.svg" alt="Demo">'}</a><nav class="nav">` +
+  `<a href="/" class="${on === "/" ? "on" : ""}">Home</a><a href="/nacht" class="${on === "/nacht" ? "on" : ""}"` +
+  `${variant ? ' data-variant="spotlight"' : ""}>De Nacht</a></nav></header><main id="main"></main></body></html>\n`;
+const spot = (name, { slots = SLOTS, built = true, page = {}, extra = {}, ...mut } = {}) => build(name, { spineCss: SPOT_CSS, spineTsx: SPOT_TSX,
+  tokens: withSlots(slots), ...mut, files: { ...(built === null ? {} : { "dist/client/index.html": BUILT(built, page) }), ...extra } });
 const spotFails = (out) => verdicts(out, "FAIL").filter((l) => l.includes("nav variant") || l.includes("--nav-spotlight-"));
 const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) derived, (\d+) asserted/) || []).slice(1).map(Number);
 {
@@ -1076,6 +1092,17 @@ const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) deriv
     passes(used, "--accent on --nav-spotlight-header-bg [nav variant \"spotlight\": the logo's dot and the current-page bar on the hot header] = 3.74 (>= 3.0 large / non-text)") &&
     !spotFails(used).length, verdicts(used, "PASS").filter((l) => l.includes("spotlight")).join(" | ") + " | " + spotFails(used).join(" | "));
   expect("and three more pairs are derived and three more asserted than with the variant unused", d1 - d0 === 3 && a1 - a0 === 3, `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1}`);
+  // F4 of #28's review: the IN USE note counts what is DERIVED, the per-map note what is asserted
+  expect("and its IN USE note calls the pairs it counts derived, not asserted", notes(used, "pair(s) read out of spine.css are derived (D7)") &&
+    !used.includes("pair(s) read out of spine.css are asserted"), lineOf(used, "IN USE"));
+  // F2 of #28's review, the scope half: no built page has the item as the current page, so the bar
+  // under the hot item is named as not derived, and not scored at the item's 2.80 here
+  expect("and names the bar under the hot item as not derived, no page having the item current",
+    notes(used, '--accent on --nav-spotlight-bg [the current-page bar under the hot item, the item being the current page] is not derived') &&
+    !verdicts(used, "FAIL").some((l) => l.includes("under the hot item")), lineOf(used, "under the hot item"));
+  // F3 of #28's review, the control: the fixture's D6 holds D4's list, at rest
+  expect("and D6 holds D4's four reached elements at rest (F3 control)",
+    passes(used, "nav variant: D6 holds the 4 element(s) D4's header reach recolours (.logo, .member-link, .nav > a, .navitem > a)"), lineOf(used, "D6"));
 }
 {
   // CONTROL, against the SHIPPED spine.css, so the real rules are what parse: the same three pairs.
@@ -1086,6 +1113,8 @@ const den = (out) => (lineOf(out, "AA denominator").match(/(\d+) pair\(s\) deriv
   expect("the shipped spine.css parses to the same three pairs, each asserted", d1 - d0 === 3 && a1 - a0 === 3 &&
     ["the hot item] = 7.52", "member link] = 8.56", "current-page bar on the hot header] = 3.74"].every((t) => verdicts(used, "PASS").some((l) => l.includes(t))),
     `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1} | ` + verdicts(used, "PASS").filter((l) => l.includes("spotlight")).join(" | "));
+  expect("and the shipped spine.css's D6 holds D4's list at rest (F3 control)",
+    passes(used, "nav variant: D6 holds the 4 element(s) D4's header reach recolours") && !verdicts(used, "FAIL").some((l) => l.includes("(D6)")), lineOf(used, "(D6)"));
 }
 const { "--nav-spotlight-header-bg": _hb, ...NO_HEADER_BG } = SLOTS;
 {
@@ -1166,6 +1195,109 @@ const { "--nav-spotlight-header-bg": _hb, ...NO_HEADER_BG } = SLOTS;
   expect("and the real verify.mjs fails the same tree", spotFails(run(fx)).length > 0);
 }
 
+// ---- C17, FOLDED from the code review of PR #28 (F1, F2, F3, F5, F6), each with a plant and a control
+// F1: the header's ink rule is joined to the :has() ground it lies on by selector. A ground that parsed
+// beside an ink that did not left the header's two slots unrequired and unscored at VERIFY: PASS, and
+// one space taken out of one :has() was enough to un-join them.
+const NO_HEADER = { "--nav-spotlight-bg": SLOTS["--nav-spotlight-bg"], "--nav-spotlight-ink": SLOTS["--nav-spotlight-ink"] };
+const INK_RULE = `  .header:has(.nav a[data-variant="spotlight"]:is(:hover, :focus-visible))
+    :is(.logo, .member-link, .nav > a, .navitem > a):not([data-variant]) { color: var(--nav-spotlight-header-ink, var(--text)); }
+`;
+const GROUND_SEL = `.header:has(.nav a[data-variant="spotlight"]:is(:hover, :focus-visible)) { background-color`;
+const RESPACED = SPOT_CSS.replace(GROUND_SEL, GROUND_SEL.replace(":hover, :focus-visible", ":hover,:focus-visible"));
+{
+  // PLANT A: the D4 header INK rule deleted, the two header slots undeclared
+  expect("the fixture's header ink rule is in SPOT_CSS exactly once", SPOT_CSS.split(INK_RULE).length === 2);
+  const out = run(spot("spot-f1-no-ink-rule", { spineCss: SPOT_CSS.replace(INK_RULE, ""), slots: NO_HEADER }));
+  expect("[2] FAILS a header ground that parses beside no header ink rule, naming the missing pair (F1)",
+    fails(out, "rules parse to an incomplete set: no pair for the header's color on the background-color of the :has() that holds the item") &&
+    !out.includes("VERIFY: PASS"), spotFails(out).join(" | "));
+}
+{
+  // PLANT C: one space taken out of the ground rule's :has() argument, which changes no rendering, the
+  // two header slots undeclared: the header pair still joins, so its two slots are still required
+  expect("the respaced fixture is SPOT_CSS less that one space", SPOT_CSS.split(GROUND_SEL).length === 2 && RESPACED.length === SPOT_CSS.length - 1);
+  const out = run(spot("spot-f1-respaced", { spineCss: RESPACED, slots: NO_HEADER }));
+  expect("[2] still requires the header's two slots after a one-space reformat inside :has() (F1)",
+    ["--nav-spotlight-header-bg", "--nav-spotlight-header-ink"].every((s) => fails(out, `so ${s} is required as an opaque colour in tokens.css, and it is not declared`)) &&
+    !out.includes("VERIFY: PASS"), spotFails(out).join(" | "));
+}
+{
+  // CONTROL: the same reformat with every slot declared reads as the unreformatted control does
+  const out = run(spot("spot-f1-respaced-control", { spineCss: RESPACED }));
+  const [d1, a1] = den(out), [d0, a0] = den(run(spot("spot-f1-respaced-unused", { spineCss: RESPACED, built: false })));
+  expect("and with every slot declared it scores the same three pairs, failing none (F1 control)",
+    d1 - d0 === 3 && a1 - a0 === 3 && !spotFails(out).length && passes(out, "member link] = 8.56"),
+    `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1} | ` + spotFails(out).join(" | "));
+}
+// F2: where the item IS the current page, the bar under it paints --accent on the ITEM's ground, which
+// no pair scored. The markup decides it: class "on" and the variant on one <a>, here on /nacht.
+const NACHT = { "dist/client/nacht/index.html": BUILT(true, { on: "/nacht" }) };
+{
+  // PLANT: the item current on /nacht, the fixture's --accent #b34700 on the item's navy #0b0583 = 2.80
+  const out = run(spot("spot-f2-bar-on-item", { extra: NACHT }));
+  expect("[2] FAILS the current-page bar on the hot item's own ground under 3.0, the item being the current page (F2)",
+    failsAny(out, '--accent on --nav-spotlight-bg [nav variant "spotlight": the current-page bar under the hot item, the item being the current page] = 2.80 (< 3.0 large / non-text)'),
+    spotFails(out).join(" | "));
+  expect("and the other three pairs still pass beside it", ["the hot item] = 7.52", "member link] = 8.56", "current-page bar on the hot header] = 3.74"]
+    .every((t) => verdicts(out, "PASS").some((l) => l.includes(t))), verdicts(out, "PASS").filter((l) => l.includes("spotlight")).join(" | "));
+}
+{
+  // CONTROL: the same pages with the item's ground on night, so the bar under it reads 3.74: four pairs
+  // derived and four asserted against the variant unused, failing none
+  const slots = { ...SLOTS, "--nav-spotlight-bg": "#000020" };
+  const out = run(spot("spot-f2-control", { slots, extra: NACHT }));
+  const [d1, a1] = den(out), [d0, a0] = den(run(spot("spot-f2-control-unused", { slots, built: false })));
+  expect("and with the item's ground clearing it, four pairs are derived and four asserted, failing none (F2 control)",
+    d1 - d0 === 4 && a1 - a0 === 4 && !spotFails(out).length &&
+    passes(out, '--accent on --nav-spotlight-bg [nav variant "spotlight": the current-page bar under the hot item, the item being the current page] = 3.74 (>= 3.0 large / non-text)'),
+    `derived ${d0} -> ${d1}, asserted ${a0} -> ${a1} | ` + spotFails(out).join(" | "));
+}
+// F3: D6, no colour transition on the header's text in a header that carries the item, held over the
+// same elements D4's reach recolours, and at rest as well as hot
+const D6_RULE = `.header:has(.nav a[data-variant="spotlight"]) :is(.logo, .member-link, .nav > a, .navitem > a) { transition: none; }
+`;
+{
+  // PLANT: D6's rule deleted
+  expect("the fixture's D6 rule is in SPOT_CSS exactly once", SPOT_CSS.split(D6_RULE).length === 2);
+  const out = run(spot("spot-f3-no-d6", { spineCss: SPOT_CSS.replace(D6_RULE, "") }));
+  expect("[2] FAILS a spine that recolours the header's text and holds no transition for it (F3)",
+    fails(out, "nav variant: spine.css colours the header's text from a :has() holding the item (D4) and carries no transition: none rule"), lineOf(out, "(D6)"));
+}
+{
+  // PLANT: D4's reach gains the header's CTA and D6's list does not
+  const css = SPOT_CSS.replace(":is(.logo, .member-link, .nav > a, .navitem > a):not([data-variant])",
+    ":is(.logo, .member-link, .nav > a, .navitem > a, .btn-action):not([data-variant])");
+  expect("the drift plant moves the reach's list only", css !== SPOT_CSS && css.includes(D6_RULE));
+  const out = run(spot("spot-f3-drift", { spineCss: css }));
+  expect("[2] FAILS D4's reach and D6's list drifting apart, naming the element (F3)",
+    fails(out, "nav variant: D6's no-transition list is not D4's header reach: .btn-action reached and not held"), lineOf(out, "(D6)"));
+}
+{
+  // PLANT: D6 scoped to the hot state, which covers entering and not leaving
+  const css = SPOT_CSS.replace(D6_RULE, D6_RULE.replace('[data-variant="spotlight"])', '[data-variant="spotlight"]:is(:hover, :focus-visible))'));
+  expect("the hot-scoped plant moves D6 only", css !== SPOT_CSS && !css.includes(D6_RULE));
+  const out = run(spot("spot-f3-hot-only", { spineCss: css }));
+  expect("[2] FAILS a D6 scoped to the hot state, saying why (F3)",
+    fails(out, "(one scoped to the hot state covers entering and not leaving)"), lineOf(out, "(D6)"));
+}
+// F5: a header mark is named by what the built header renders. An image logo renders no dot, so the
+// pair names the bar, says spine.css also styles a dot no page renders, and is scored all the same.
+{
+  const out = run(spot("spot-f5-image-logo", { page: { dot: false }, slots: { ...SLOTS, "--nav-spotlight-header-bg": "#0b0583" } }));
+  expect("[2] names only the marks the built header renders, and still fails the pair (F5)",
+    failsAny(out, "--accent on --nav-spotlight-header-bg [nav variant \"spotlight\": the current-page bar on the hot header (spine.css also " +
+      "styles the logo's dot, which no built page carrying the variant renders)] = 2.80 (< 3.0 large / non-text)"), spotFails(out).join(" | "));
+}
+// F6: one reading of the publish directory, shared by [2] and [11]. REGRESSION GUARD: the two copies
+// read it alike before the fold too, so this holds there; it is what keeps them alike after.
+{
+  const out = run(spot("spot-f6-publish", { built: null, extra: { "netlify.toml": '[build]\n  publish = "out"\n', "out/index.html": BUILT(true) } }));
+  expect("[2] and [11] both read the directory netlify.toml publishes (F6, REGRESSION GUARD)",
+    notes(out, 'nav variant "spotlight": IN USE on 1 of 1 prerendered page(s) in out ') && passes(out, "byte-identical in out (R109)"),
+    lineOf(out, "IN USE") + " | " + lineOf(out, "(R109)"));
+}
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
@@ -1176,7 +1308,9 @@ console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
 console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
-console.log("And brief S-NV U1 (C17 the nav item variant SPOTLIGHT, declared then enforced, D7).");
+console.log("And brief S-NV U1 (C17 the nav item variant SPOTLIGHT, declared then enforced, D7), and the fold of");
+console.log("#28's review (C17 the parse guard F1, the bar under the hot item F2, D6 held to D4's list F3, the");
+console.log("derived count F4, marks named by the built header F5, one publish directory F6).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

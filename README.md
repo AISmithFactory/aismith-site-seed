@@ -242,16 +242,26 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
 Each one has a planted negative and a green control in `verify.selftest.mjs` (C17).
 
 - **The spotlight variant, declared then enforced (plan-nav-variant D7).** A nav item that carries
-  `variant: "spotlight"` is IN USE when a prerendered page in the publish directory (as `[11]` reads
-  it) has `data-variant="spotlight"` on an `<a>`. The build is the operand, not the source, so a
-  variant set through a constant is seen. In use, every slot the spine's spotlight rules pair is
-  required as an opaque colour and named when it is not; a pair with one slot declared FAILS as
-  half-declared rather than being skipped; and three pairs are read out of `spine.css` and scored:
-  the item's ink on its ground and the hot header's ink on its ground at 4.5, and `--accent` (the
-  logo's dot and the current-page bar, `HEADER_MARKS`) on the hot header's ground at 3.0. They join
-  the AA denominator only in use, the 3.0 pair as `ACCENT_LARGE_PAIRS` does, so a site that sets no
+  `variant: "spotlight"` is IN USE when a prerendered page in the publish directory (the one reading
+  `[11]` shares) has `data-variant="spotlight"` on an `<a>`. The build is the operand, not the
+  source, so a variant set through a constant is seen. In use, every slot the spine's spotlight
+  rules pair is required as an opaque colour and named when it is not; a pair with one slot declared
+  FAILS as half-declared rather than being skipped; and the pairs are read out of `spine.css` and
+  scored: the item's ink on its ground and the hot header's ink on its ground at 4.5, `--accent`
+  (the logo's dot and the current-page bar, `HEADER_MARKS`) on the hot header's ground at 3.0, and,
+  where a built page has the item as the current page (class `on` and the variant on one `<a>`),
+  `--accent` on the item's own ground at 3.0 for the bar under it (`ITEM_MARKS`). A header mark is
+  scored whether or not a built page renders it, and its label names only the marks the built header
+  does render, so a site whose logo is an image is not told about a dot. They join the AA
+  denominator only in use, the 3.0 pairs as `ACCENT_LARGE_PAIRS` does, so a site that sets no
   variant reads the same denominator as before. Not in use, declared slots are named and not
   asserted. With no built page it is NOT DECIDED: a warning locally, a failure under `--ci`.
+- **The spine's own spotlight rules, held (the code review of #28).** Where a spine component writes
+  `data-variant`, `[2]` FAILS unless the rules parse to both the item's pair and the header's, and
+  selectors are joined with their whitespace taken out, so a reformat inside a `:has()` cannot drop
+  the header's pair (F1). Where `spine.css` recolours the header's text from the item (D4), `[2]`
+  FAILS unless a `transition: none` rule holds the same element list in a header that carries the
+  item at rest as well as hot (D6, F3).
 
 ## Release history
 
@@ -274,6 +284,12 @@ rendered before.
   transition its text's colour. `--nav-spotlight-glow`, `--nav-spotlight-halo` and
   `--nav-spotlight-wash` are optional and default to none. No pulse and no scale (plan OA1).
 - **`[2]` requires and scores them** (D5, D7) as the section above says.
+- **The code review of #28, folded.** The header's pair is joined to its ground with whitespace
+  taken out, and a spine that writes the variant must parse to both pairs (F1); the bar under the
+  hot item is scored on the item's ground where it is the current page (F2, Q-A); D6 is checked
+  against D4's list (F3); the IN USE note counts pairs as derived (F4); a header mark is named by
+  what the built header renders (F5); and `[2]` and `[11]` share one reading of the publish
+  directory (F6).
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 

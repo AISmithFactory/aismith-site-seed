@@ -270,13 +270,15 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
                                                              top-level links and the member link
                                                              on it, at 4.5
    The logo's dot and the current-page bar keep --accent through the hot header, so [2] also scores
-   --accent on --nav-spotlight-header-bg at 3.0. THREE ARE OPTIONAL and default to none:
-   --nav-spotlight-glow (text-shadow on the item and the hot header's text), --nav-spotlight-halo
-   (box-shadow on the item) and --nav-spotlight-wash (background-image layers over the hot header's
-   ground: a gradient, or a tiled image under public/). The fallbacks sanction the names for (d2)
-   and keep a site that sets no variant rendering as it did; they are not a rendering a passing
-   site may reach. The item rule applies at every width, so in the phone menu the item takes its
-   own pair and nothing else moves. */
+   --accent on --nav-spotlight-header-bg at 3.0, and, where a built page has the item as the current
+   page, --accent on --nav-spotlight-bg at 3.0 for the bar under the item. D6 below holds the same
+   element list as the header reach, and [2] fails the two drifting apart. THREE ARE OPTIONAL and
+   default to none: --nav-spotlight-glow (text-shadow on the item and the hot header's text),
+   --nav-spotlight-halo (box-shadow on the item) and --nav-spotlight-wash (background-image layers
+   over the hot header's ground: a gradient, or a tiled image under public/). The fallbacks sanction
+   the names for (d2) and keep a site that sets no variant rendering as it did; they are not a
+   rendering a passing site may reach. The item rule applies at every width, so in the phone menu
+   the item takes its own pair and nothing else moves. */
 .nav a[data-variant="spotlight"]:is(:hover, :focus-visible) {
   color: var(--nav-spotlight-ink, var(--accent-text));
   background-color: var(--nav-spotlight-bg, transparent);
@@ -302,7 +304,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 /* No colour transition on the header's text in a header that carries the item, and only there:
    the ground switches in one frame, so a .18s ink would sit dark on the hot ground meanwhile. It
    holds at rest too, because a transition takes its timing from the style it lands in, so a rule
-   scoped to the hot state would cover entering and not leaving. Same list as the reach above. */
+   scoped to the hot state would cover entering and not leaving. Same list as the reach above, and
+   verify.mjs [2] fails the two drifting apart. */
 .header:has(.nav a[data-variant="spotlight"]) :is(.logo, .member-link, .nav > a, .navitem > a) { transition: none; }
 
 /* ---- band (CTA) -----------------------------------------------------------*/
