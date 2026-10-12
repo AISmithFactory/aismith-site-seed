@@ -41,6 +41,17 @@
 // same path named and not failed, beside a rewrite that still fails (F2). Run against #25's head
 // before the fold, 7 of these 9 assertions FAIL; the two that hold there are marked REGRESSION GUARD.
 //
+// EXTENDED 2026-10-12 (brief S-VC-U1, row R055) by the arm THAT run built: C18 [3]'s superlative
+// check by declared register, an en arm (morphology plus a closed stop-list of eight), an nl arm (a
+// list, aller...ste and meest plus an adjective) and a hype list, over the copy a TypeScript parse
+// extracts. A PLANT surfaces as a candidate in the [3] REVIEW line, a GREEN CONTROL reads PASS, the
+// NEGATIVE CONTROL is a mutant of verify.mjs with arm selection removed, and the em-dash half that
+// run did not touch gains three REGRESSION GUARDs, main holding no case for it. Run against the
+// verify.mjs of main before that run, 31 of these 41 assertions FAIL; the 10 that hold there are the
+// four GREEN CONTROLs, three silent-side checks (no register REVIEW under en-GB, no [3] FAIL under
+// --ci, nothing reported on `=> ... <T>`) and the three REGRESSION GUARDs. The three assertions that
+// need the parse are named NOT RUN where `typescript` is not installed, and fail under CI.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -60,7 +71,7 @@
 // Usage: node agents/site/verify.selftest.mjs
 //   exit 0 = every case behaved as specified | exit 1 = a case did not
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -78,6 +89,11 @@ if (!ROOT || ROOT.length < 8 || !ROOT.startsWith(tmpdir())) {
 
 const CANON_SEED = "AISmithFactory/aismith-site-seed";
 const SHA40 = "0".repeat(40);
+// This repo's own `typescript` (a devDependency, installed by `npm ci`), lent to the C18 fixtures
+// that exercise [3]'s parse. null where it is not installed: C18 says which assertions it could
+// not run, and under CI that is a failure, since the workflow runs `npm ci` before this harness.
+const TS_DIR = existsSync(join(HERE, "..", "..", "node_modules", "typescript", "package.json"))
+  ? join(HERE, "..", "..", "node_modules", "typescript") : null;
 
 // ---- the base fixture ------------------------------------------------------------------------
 // A minimal site that is quiet on the checks this harness scores. Every negative case below is
@@ -205,11 +221,17 @@ function build(name, mut = {}) {
   if (mut.charterFile !== null) put(site, mut.charterFile ?? "demo-site-charter.md", CHARTER);
   if (mut.workflow !== null) put(site, ".github/workflows/site-verify.yml", mut.workflow ?? WORKFLOW());
   if (mut.brief) put(site, "intake-brief.md", mut.brief);
+  // `ts: true` lends the site THIS repo's own `typescript`, as a symlink, which is where [3]'s
+  // voice arm resolves it from on a real site; without it the arm takes its fallback.
+  if (mut.ts && TS_DIR) {
+    mkdirSync(join(site, "node_modules"), { recursive: true });
+    symlinkSync(TS_DIR, join(site, "node_modules", "typescript"), "dir");
+  }
   return { site, seed };
 }
 
-function run(fx, { args = [], env = {} } = {}) {
-  const argv = [VERIFY, fx.site, "--seed", fx.seed, ...args];
+function run(fx, { args = [], env = {}, verify = VERIFY } = {}) {
+  const argv = [verify, fx.site, "--seed", fx.seed, ...args];
   try {
     return execFileSync(process.execPath, argv, {
       env: { ...process.env, CI: "", GITHUB_REPOSITORY: "", SEED_REPO: "", ...env },
@@ -240,7 +262,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (R055, the [3] voice arm)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -1024,6 +1046,158 @@ const LINKS = '<!doctype html><html><body><a href="/menu.pdf">Menu</a> <a href="
   expect("and fails closed under --ci", fails(run(fx, { args: ["--ci"] }), "no dist/client to read"), lineOf(run(fx, { args: ["--ci"] }), "dist/client"));
 }
 
+// ---- C18. R055 (brief S-VC-U1): [3]'s superlative arm by declared register -------------------
+// Each fixture is the base site plus ONE copy file under src/content (and, where stated, another
+// <html lang>), lent this repo's `typescript` so the arm parses as it does on a real site. A REVIEW
+// never fails, so a PLANT here "goes red" by surfacing as a candidate in the [3] REVIEW line, and a
+// GREEN CONTROL reads PASS "no superlative candidates". The two MUTANTS are verify.mjs with one
+// line replaced, written into this harness's scratch directory: each must find its anchor exactly
+// once, so a renamed line fails here rather than leaving the mutant equal to the real checker.
+const voiceRoot = (lang) => ROOT_TSX.replace('<html lang="en">', lang === null ? "<html>" : `<html lang="${lang}">`);
+const voiceFx = (name, copy, { lang = "en", ts = true, file = "src/content/voice.tsx" } = {}) =>
+  build(`voice-${name}`, { ts, rootTsx: voiceRoot(lang), files: { [file]: copy } });
+const page = (...paras) => `export const Voice = () => (\n  <section>\n${paras.map((p) => `    <p>${p}</p>\n`).join("")}  </section>\n);\n`;
+const candLine = (out) => lineOf(out, "superlative candidates");
+// the words one file reports under one arm, or null where that file and arm report nothing
+const cands = (out, file, arm) => {
+  const item = candLine(out).replace(/^.*?a liability hedge\): /, "").split(" | ").find((s) => s.startsWith(`${file} [${arm}]: `));
+  return item ? item.slice(`${file} [${arm}]: `.length) : null;
+};
+const VOICE_FILE = "src/content/voice.tsx";
+const VERIFY_SRC = readFileSync(VERIFY, "utf8");
+const mutant = (name, from, to) => {
+  const path = join(ROOT, `verify.mutant-${name}.mjs`);
+  writeFileSync(path, VERIFY_SRC.replace(from, to));
+  return { path, anchored: VERIFY_SRC.split(from).length === 2 };
+};
+const voiceNotRun = [];
+// an assertion that needs the parse: run where `typescript` is installed, named where it is not
+const parseExpect = (label, cond, detail) => (TS_DIR ? expect(label, cond, detail) : voiceNotRun.push(label));
+if (!TS_DIR && process.env.CI === "true")
+  expect("C18 can lend the fixtures this repo's typescript (the workflow runs npm ci first)", false, "no node_modules/typescript at the repo root");
+{
+  // GREEN CONTROL: the base site's copy carries no candidate, and the arm says what it read
+  const out = run(build("voice-control", { ts: true }));
+  expect("[3] GREEN CONTROL: the base site reads no superlative candidates", passes(out, "no superlative candidates"), candLine(out));
+  expect("[3] names the arm, its register source and the hype list",
+    notes(out, 'voice arm=en from <html lang="en"> in src/routes/__root.tsx (primary subtag), plus the hype list'), lineOf(out, "voice arm="));
+  expect("[3] states the corpus by its three roots with a per-root count",
+    lineOf(out, "voice arm=").includes("corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, 4 file(s): src/content 1, src/routes 2, src/components/spine 1"),
+    lineOf(out, "voice arm="));
+  parseExpect("[3] names the extractor it used, the TypeScript parse", lineOf(out, "voice arm=").includes("extractor: TypeScript parse (typescript "), lineOf(out, "voice arm="));
+}
+{
+  // PLANT: an unlisted English -est word fires under the en arm; one more file moves the corpus count
+  const out = run(voiceFx("en-newest", page("The newest way to book a table.")));
+  expect("[3] PLANT: an unlisted -est word fires the en arm", cands(out, VOICE_FILE, "en") === "newest", candLine(out));
+  expect("and the candidate line is REVIEW, never FAIL", /^\s*REVIEW\s/.test(candLine(out)), candLine(out));
+  expect("and the corpus count follows the files", lineOf(out, "voice arm=").includes("5 file(s): src/content 2, src/routes 2, src/components/spine 1"), lineOf(out, "voice arm="));
+}
+{
+  // GREEN CONTROL: each of the eight stop-listed words, in copy, is silent; so are the three
+  // context exclusions carried over from the old list
+  const copy = page("Send a request, test it, read the digest, and rest.",
+    "We take an honest interest in the manifest, and we attest to it.",
+    "As best we reasonably can, we follow best practice and best effort, to the best of our knowledge.");
+  const out = run(voiceFx("en-stoplist", copy));
+  expect("[3] GREEN CONTROL: the eight stop-listed words and the three context exclusions are silent", passes(out, "no superlative candidates"), candLine(out));
+  // PLANT: the same copy under a mutant whose stop-list is emptied fires all eight, so it is the
+  // list that silences them and not a morphology that never matched them
+  const m = mutant("stoplist", 'const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"];', "const VOICE_STOP_EN = [];");
+  expect("the stop-list mutant finds its anchor once", m.anchored);
+  const got = (cands(run(voiceFx("en-stoplist-mutant", copy), { verify: m.path }), VOICE_FILE, "en") || "").split(", ").map((w) => w.toLowerCase());
+  for (const w of ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"])
+    expect(`[3] PLANT: with the stop-list emptied, "${w}" fires`, got.includes(w), got.join(", "));
+}
+{
+  // PLANT: the four irregulars fire, and a context exclusion does not swallow a promotional use
+  const out = run(voiceFx("en-irregular", page("The best CRM, most loved, the least fuss, never the worst.")));
+  expect("[3] PLANT: best, most, least and worst fire the en arm", cands(out, VOICE_FILE, "en") === "best, most, least, worst", candLine(out));
+}
+{
+  // the register: en-GB selects en by its PRIMARY subtag (ruled F9)
+  const out = run(voiceFx("en-gb", page("The newest way to book a table."), { lang: "en-GB" }));
+  expect("[3] en-GB selects the en arm", notes(out, 'voice arm=en from <html lang="en-GB">') && cands(out, VOICE_FILE, "en") === "newest", lineOf(out, "voice arm="));
+  expect("and reports no register REVIEW", !out.includes("register: no arm"), lineOf(out, "register:"));
+}
+const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijke manieren om te zingen.",
+  "De meeste mensen komen naar het feest.");
+{
+  // PLANT and GREEN CONTROL in one Dutch fixture: the list and the analytic superlative fire;
+  // the quantifier meeste and the noun feest stay silent, the en arm not running under nl
+  const out = run(voiceFx("nl", NL, { lang: "nl" }));
+  expect("[3] nl selects the nl arm", notes(out, 'voice arm=nl from <html lang="nl">'), lineOf(out, "voice arm="));
+  expect("[3] PLANT: the nl arm fires a listed form and meest + adjective", cands(out, VOICE_FILE, "nl") === "mooiste, meest toegankelijke", candLine(out));
+  expect("[3] GREEN CONTROL: the quantifier meeste is silent", !/meeste/i.test(candLine(out)), candLine(out));
+  expect("[3] GREEN CONTROL: the en arm does not run under nl, so feest is silent", cands(out, VOICE_FILE, "en") === null && !/feest/i.test(candLine(out)), candLine(out));
+  // NEGATIVE CONTROL: verify.mjs with arm selection removed runs every arm on every site, and its
+  // English arm fires on the Dutch noun feest (live copy three times in zuidgeluid-site's corpus)
+  const m = mutant("no-arm-selection", "const voiceArms = voicePrimary && Object.hasOwn(VOICE_ARMS, voicePrimary) ? [voicePrimary] : [];",
+    "const voiceArms = Object.keys(VOICE_ARMS);");
+  expect("the arm-selection mutant finds its anchor once", m.anchored);
+  const mout = run(voiceFx("nl-mutant", NL, { lang: "nl" }), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with arm selection removed, the en arm fires on the Dutch fixture's feest",
+    (cands(mout, VOICE_FILE, "en") || "").split(", ").includes("feest"), candLine(mout));
+}
+{
+  // PLANT: allerliefste, by the one closed pattern
+  const out = run(voiceFx("nl-aller", page("Onze allerliefste leiding."), { lang: "nl" }));
+  expect("[3] PLANT: aller...ste fires the nl arm", cands(out, VOICE_FILE, "nl") === "allerliefste", candLine(out));
+}
+{
+  // a hype word fires whatever the arm, and under no arm at all
+  const en = run(voiceFx("hype-en", page("An amazing evening.")));
+  expect("[3] PLANT: a hype word fires under the en arm", cands(en, VOICE_FILE, "hype") === "amazing", candLine(en));
+  const nl = run(voiceFx("hype-nl", page("Een prachtig en hartverwarmend concert, AMAZING."), { lang: "nl" }));
+  expect("[3] PLANT: a hype word fires under the nl arm, the two the client measured missing among them",
+    cands(nl, VOICE_FILE, "hype") === "prachtig, hartverwarmend, AMAZING", candLine(nl));
+}
+{
+  // no lang: REVIEW and NOT FAIL under --ci (S9.3 is IMPORTANT); [4] is what fails a missing lang
+  const out = run(voiceFx("nolang", page("The newest and most amazing way."), { lang: null }), { args: ["--ci"] });
+  expect("[3] no lang reports REVIEW register: no arm, under --ci", /^\s*REVIEW\s/.test(lineOf(out, "register: no arm for lang=(none)")), lineOf(out, "register:"));
+  expect("and no [3] line FAILs", !verdicts(out, "FAIL").some((l) => /register|voice|superlative/.test(l)), verdicts(out, "FAIL").join(" | "));
+  expect("and only the hype list ran", cands(out, VOICE_FILE, "hype") === "amazing" && cands(out, VOICE_FILE, "en") === null && notes(out, "voice arm=none"), candLine(out));
+  // a language the arms do not know is the same branch, named
+  const fr = run(voiceFx("fr", page("The newest and most amazing way."), { lang: "fr" }));
+  expect("[3] an unknown language reports REVIEW register: no arm for lang=fr", /^\s*REVIEW\s/.test(lineOf(fr, "register: no arm for lang=fr")), lineOf(fr, "register:"));
+}
+{
+  // `=> ... <T>` in a .ts: an arrow and a generic, which a regex extractor read as JSX text
+  // (aismith-site's forge-intake catalog.ts). Parsed as TS, it carries no copy at all.
+  const CATALOG = "type Row = { at: number };\ndeclare function latest<T>(rows: T[]): T[];\n" +
+    "export const byDate = <T extends Row>(rows: T[]) => latest(rows) as Array<T>;\n";
+  const out = run(voiceFx("arrow-generic", CATALOG, { file: "src/content/catalog.ts" }));
+  parseExpect("[3] `=> ... <T>` in a .ts is not copy: the parse reports nothing there", cands(out, "src/content/catalog.ts", "en") === null && passes(out, "no superlative candidates"), candLine(out));
+  // PLANT for the same file: under the fallback the identifier reaches the matcher
+  const fb = run(voiceFx("arrow-generic-fallback", CATALOG, { file: "src/content/catalog.ts", ts: false }));
+  expect("[3] PLANT: under the fallback the same .ts fires on the identifier latest", cands(fb, "src/content/catalog.ts", "en") === "latest", candLine(fb));
+}
+{
+  // module specifiers and non-copy attribute values are markup; a title attribute is copy
+  const CARD = 'import Hero from "./biggest-hero";\n' +
+    'export const Card = () => <a className="card-newest" href="/latest" data-kind="fastest" title="Our finest work"><Hero />Read</a>;\n';
+  const out = run(voiceFx("attrs", CARD));
+  parseExpect("[3] the parse drops a module specifier and className, href and data-* values, and keeps a title", cands(out, VOICE_FILE, "en") === "finest", candLine(out));
+}
+{
+  // the parse-absent fallback says so, and still runs the arms
+  const out = run(voiceFx("fallback", page("The newest way."), { ts: false }));
+  expect("[3] the parse-absent fallback prints its note", notes(out, "voice extractor FALLBACK") && lineOf(out, "voice arm=").includes("extractor: comment-stripped source (FALLBACK)"), lineOf(out, "voice extractor"));
+  expect("and the arms still run on the comment-stripped source", cands(out, VOICE_FILE, "en") === "newest", candLine(out));
+}
+{
+  // REGRESSION GUARD, the em-dash half, which this run does not touch: main held no case for it
+  const EM = String.fromCharCode(0x2014);
+  const lit = run(voiceFx("emdash-literal", page(`Plain copy ${EM} with a dash.`)));
+  expect("[3] REGRESSION GUARD: a literal em-dash in copy FAILS", fails(lit, "em-dash(es) in rendered copy"), lineOf(lit, "em-dash"));
+  const ent = run(voiceFx("emdash-entity", page("Plain copy &mdash; with a dash.")));
+  expect("[3] REGRESSION GUARD: an em-dash entity in copy FAILS", fails(ent, "em-dash(es) in rendered copy"), lineOf(ent, "em-dash"));
+  const com = run(voiceFx("emdash-comment", `// a comment ${EM} is exempt\n` + page("Plain copy.")));
+  expect("[3] REGRESSION GUARD: an em-dash in a comment passes", passes(com, "no em-dashes in rendered copy"), lineOf(com, "em-dash"));
+}
+if (voiceNotRun.length) console.log(`  NOT RUN (typescript is not installed here; npm ci installs it): ${voiceNotRun.join(" | ")}`);
+
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
 console.log("SCOPE: the three checks added 2026-09-18 (rows 046 ground half, 098, 107), the [8]");
@@ -1034,6 +1208,7 @@ console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
 console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
+console.log("And brief S-VC-U1 (C18 [3] the superlative arm by declared register R055, with three regression guards on its em-dash half).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

@@ -237,9 +237,48 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
   nothing: a warning locally, a failure under `--ci`. The gate workflow builds in the step before the
   gate, so CI always has one.
 
+### What `[3]` gained on 2026-10-12 (brief S-VC-U1)
+
+Its planted negatives, green controls and one negative control are in `verify.selftest.mjs` (C18).
+
+- **The superlative half reads the site's declared register (R055).** The arm is chosen by the
+  primary subtag of the `<html lang>` `__root` hard-sets, the declaration `[4]` already asserts: `en`
+  (so `en-GB` too) or `nl`. Any other language, or none, runs the hype list alone and reports
+  `REVIEW register: no arm for lang=<x>`, never a failure; `[4]` is what fails a missing `lang`.
+- **Three closed lists and one morphology.** English: `-est` with Unicode word bounds, plus `best`,
+  `most`, `least` and `worst`, minus a stop-list of eight measured non-superlatives (`request`,
+  `interest`, `honest`, `test`, `digest`, `rest`, `manifest`, `attest`). Dutch: the superlative forms
+  measured in the Dutch corpora, `aller...ste`, and the analytic `meest` plus an adjective, while
+  ordinals, adjectival `-ste` and the quantifier `meeste` stay out. Hype: the old list's
+  non-superlative words plus `prachtig` and `hartverwarmend`, run whatever the arm. The old list's
+  context exclusions (`as best`, `best practice(s)`, `best effort`, `best of our knowledge`) carry
+  over. A word joins a list by a seed release, like any other line of the checker.
+- **Copy, not source.** Each corpus file is parsed with the `typescript` in the site's own
+  `node_modules` (the nearest one from its root upward, never a global one), and the arms match JSX
+  text, string literals and template text, minus module specifiers and the values of `className`,
+  `id`, `key`, `href`, `to`, `src`, `rel`, `type`, `role`, `name` and `data-*`. Identifiers and
+  generics are not copy. With no `typescript` installed the arms read the comment-stripped source, as
+  before, and a note says so; the gate workflow runs `npm ci` before the gate, so CI parses.
+- **Advisory, always.** Candidates are one `REVIEW` line, per file per arm. One note names the arm,
+  the `lang` it came from, the extractor, the corpus by its three roots (`src/content`, `src/routes`
+  and `src/components/spine`, `.tsx` and `.ts`) with a per-root count, the strings extracted, and
+  each arm's match count. The em-dash half and its corpus are unchanged.
+
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief S-VC-U1: the `[3]` voice check by declared register)
+
+No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
+move.
+
+- **R055** `[3]`'s superlative check selects an arm by the primary subtag of `__root`'s
+  `<html lang>` (`en` or `nl`; otherwise the hype list alone, as REVIEW), matches the copy a
+  TypeScript parse extracts rather than the raw source, and states its corpus by name with per-root
+  counts. English gets `-est` morphology plus a closed stop-list, Dutch a list, hype words a list,
+  and every output stays REVIEW. On this seed it reads `en` from `en-GB` and surfaces `closest` in
+  four content files and `Most` in one, where the old list surfaced nothing.
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 
