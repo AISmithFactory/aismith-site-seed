@@ -52,6 +52,18 @@
 // --ci, nothing reported on `=> ... <T>`) and the three REGRESSION GUARDs. The three assertions that
 // need the parse are named NOT RUN where `typescript` is not installed, and fail under CI.
 //
+// FOLDED the same day from the code review of PR #27, each finding with its own plant or control:
+// C18 a string-literal type dropped from copy while a call argument stays copy (F1), with a mutant
+// that lacks the skip; a `typescript` in a directory above the site's root not borrowed (F3); the
+// three copies of the <html lang> expression held byte-identical, with a negative control on an
+// edited copy (F5); the syntax errors the parser recovered from named in a note (F6); a missing
+// lang read as missing (F7); and each arm's own example greeting, which that arm reports (F8). Run
+// against #27's head before the fold, 7 of these 15 assertions FAIL; the 8 that hold there are the
+// clean-tree control, the F1 mutant (that head had no skip to remove, and the mutant's anchor
+// assertion is one of the 7), the F5 pair, the recovered copy still read, the nl example (the old
+// message already named it) and the two greetings firing their arms. Six of the 15 need a
+// `typescript` and are named NOT RUN without one, as the three above are.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -262,7 +274,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (R055, the [3] voice arm)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (R055, the [3] voice arm, and the review fold of #27)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -1085,6 +1097,7 @@ if (!TS_DIR && process.env.CI === "true")
     lineOf(out, "voice arm=").includes("corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, 4 file(s): src/content 1, src/routes 2, src/components/spine 1"),
     lineOf(out, "voice arm="));
   parseExpect("[3] names the extractor it used, the TypeScript parse", lineOf(out, "voice arm=").includes("extractor: TypeScript parse (typescript "), lineOf(out, "voice arm="));
+  expect("[3] GREEN CONTROL: a tree the parser reads cleanly names no syntax errors (F6)", !out.includes("parse recovered from syntax errors"), lineOf(out, "voice extractor"));
 }
 {
   // PLANT: an unlisted English -est word fires under the en arm; one more file moves the corpus count
@@ -1092,6 +1105,7 @@ if (!TS_DIR && process.env.CI === "true")
   expect("[3] PLANT: an unlisted -est word fires the en arm", cands(out, VOICE_FILE, "en") === "newest", candLine(out));
   expect("and the candidate line is REVIEW, never FAIL", /^\s*REVIEW\s/.test(candLine(out)), candLine(out));
   expect("and the corpus count follows the files", lineOf(out, "voice arm=").includes("5 file(s): src/content 2, src/routes 2, src/components/spine 1"), lineOf(out, "voice arm="));
+  expect('[3] the REVIEW line\'s example is the en arm\'s own greeting, "Best wishes" (F8)', candLine(out).includes('("Best wishes" is fine, so is a liability hedge)'), candLine(out));
 }
 {
   // GREEN CONTROL: each of the eight stop-listed words, in copy, is silent; so are the three
@@ -1129,6 +1143,7 @@ const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijk
   expect("[3] nl selects the nl arm", notes(out, 'voice arm=nl from <html lang="nl">'), lineOf(out, "voice arm="));
   expect("[3] PLANT: the nl arm fires a listed form and meest + adjective", cands(out, VOICE_FILE, "nl") === "mooiste, meest toegankelijke", candLine(out));
   expect("[3] GREEN CONTROL: the quantifier meeste is silent", !/meeste/i.test(candLine(out)), candLine(out));
+  expect('[3] the REVIEW line\'s example is the nl arm\'s own greeting, "Beste klant" (F8)', candLine(out).includes('("Beste klant" is fine, so is a liability hedge)'), candLine(out));
   expect("[3] GREEN CONTROL: the en arm does not run under nl, so feest is silent", cands(out, VOICE_FILE, "en") === null && !/feest/i.test(candLine(out)), candLine(out));
   // NEGATIVE CONTROL: verify.mjs with arm selection removed runs every arm on every site, and its
   // English arm fires on the Dutch noun feest (live copy three times in zuidgeluid-site's corpus)
@@ -1158,6 +1173,9 @@ const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijk
   expect("[3] no lang reports REVIEW register: no arm, under --ci", /^\s*REVIEW\s/.test(lineOf(out, "register: no arm for lang=(none)")), lineOf(out, "register:"));
   expect("and no [3] line FAILs", !verdicts(out, "FAIL").some((l) => /register|voice|superlative/.test(l)), verdicts(out, "FAIL").join(" | "));
   expect("and only the hype list ran", cands(out, VOICE_FILE, "hype") === "amazing" && cands(out, VOICE_FILE, "en") === null && notes(out, "voice arm=none"), candLine(out));
+  const none = lineOf(out, "voice arm=none");
+  expect('[3] the note says __root hard-sets no lang, and claims neither lang="" nor a primary subtag (F7)',
+    none.includes('voice arm=none, src/routes/__root.tsx hard-sets no <html lang="..">, plus the hype list') && !none.includes('lang=""') && !none.includes("primary subtag"), none);
   // a language the arms do not know is the same branch, named
   const fr = run(voiceFx("fr", page("The newest and most amazing way."), { lang: "fr" }));
   expect("[3] an unknown language reports REVIEW register: no arm for lang=fr", /^\s*REVIEW\s/.test(lineOf(fr, "register: no arm for lang=fr")), lineOf(fr, "register:"));
@@ -1196,6 +1214,65 @@ const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijk
   const com = run(voiceFx("emdash-comment", `// a comment ${EM} is exempt\n` + page("Plain copy.")));
   expect("[3] REGRESSION GUARD: an em-dash in a comment passes", passes(com, "no em-dashes in rendered copy"), lineOf(com, "em-dash"));
 }
+// ---- C18, the fold of #27's review (F1, F3, F5, F6, F8) ----
+{
+  // F1: a string-literal TYPE is not copy (aismith-site's `toggle<K extends "onRequest" | ...>`),
+  // while a string passed as a call argument still is, which no parse can tell from a label: that
+  // half is the controller's (a stop-list word, the noise, or re-opening the closed list)
+  const TOGGLE = 'declare function toggle<K extends "latest" | "tracks">(k: K): void;\ntype Kind = "fastest" | "plain";\n' +
+    'export const flip = (k: Kind) => toggle("newest");\n';
+  const out = run(voiceFx("literal-type", TOGGLE, { file: "src/content/toggle.ts" }));
+  parseExpect("[3] GREEN CONTROL: a string-literal type is not copy, so latest and fastest are silent (F1)",
+    !/latest|fastest/.test(cands(out, "src/content/toggle.ts", "en") ?? ""), candLine(out));
+  parseExpect("and a call argument is still read as copy, so newest fires (F1, the controller's half)", cands(out, "src/content/toggle.ts", "en") === "newest", candLine(out));
+  // PLANT: the same file under a mutant without the string-literal-type skip fires both types
+  const m = mutant("literal-type", "ts.isLiteralTypeNode(n) && ts.isStringLiteral(n.literal)", "false");
+  expect("the string-literal-type mutant finds its anchor once", m.anchored);
+  const mout = run(voiceFx("literal-type-mutant", TOGGLE, { file: "src/content/toggle.ts" }), { verify: m.path });
+  parseExpect("[3] PLANT: with the string-literal-type skip removed, latest and fastest fire (F1)",
+    cands(mout, "src/content/toggle.ts", "en") === "latest, fastest, newest", candLine(mout));
+}
+{
+  // F3: a typescript in a directory ABOVE the site's root is not the site's, so the arm takes its
+  // fallback there, whatever TMPDIR sits under
+  const fx = voiceFx("ts-above-root", page("The newest way."), { ts: false });
+  if (TS_DIR) {
+    mkdirSync(join(dirname(fx.site), "node_modules"), { recursive: true });
+    symlinkSync(TS_DIR, join(dirname(fx.site), "node_modules", "typescript"), "dir");
+  }
+  const out = run(fx);
+  parseExpect("[3] a typescript above the site's root is not borrowed: the fallback runs and says why (F3)",
+    lineOf(out, "voice extractor FALLBACK").includes("no node_modules/typescript at the site's root") && lineOf(out, "voice arm=").includes("extractor: comment-stripped source (FALLBACK)"),
+    lineOf(out, "voice extractor"));
+}
+{
+  // F5: [3] reads the register with [4]'s own expression, which verify.mjs holds three times ([3],
+  // [4], and [4]'s og:locale check); nothing else holds them equal
+  const langExprs = (src) => [...src.matchAll(/\.match\((\/<html\\s\+lang=[^\n]*?\/[a-z]*)\)/g)].map((x) => x[1]);
+  const got = langExprs(VERIFY_SRC);
+  expect("[3] the <html lang> expression is held three times in verify.mjs, all three byte-identical (F5)",
+    got.length === 3 && new Set(got).size === 1 && VERIFY_SRC.split("<html\\s+lang=").length === 4, got.join(" | "));
+  // NEGATIVE CONTROL: og:locale's copy edited, the same test tells the three apart
+  const at = String.raw`const langTag = rootSrc && (rootSrc.match(/<html\s+lang=["']([a-zA-Z-]+)`;
+  const drift = VERIFY_SRC.replace(at, at.replace("[a-zA-Z-]+", "[a-z]+"));
+  expect("[3] NEGATIVE CONTROL: with og:locale's copy edited, the three are not all equal (F5)",
+    VERIFY_SRC.split(at).length === 2 && new Set(langExprs(drift)).size === 2);
+}
+{
+  // F6: the parser does not throw on malformed source, it recovers; the count it recovered from is
+  // the note, and the copy it recovered is still read
+  const out = run(voiceFx("parse-errors", "export const Voice = () => (\n  <section>\n    <p>The newest way to book.\n  </section>\n);\n"));
+  parseExpect("[3] PLANT: a file the parser recovered from is named with its syntax-error count (F6)",
+    /^\s*----\s+voice extractor: the parse recovered from syntax errors in src\/content\/voice\.tsx \(\d+\)/.test(lineOf(out, "parse recovered")), lineOf(out, "voice extractor"));
+  parseExpect("and the copy it recovered is still read", (cands(out, VOICE_FILE, "en") || "").split(", ").includes("newest"), candLine(out));
+}
+{
+  // F8: each arm's example greeting is a candidate that arm itself reports
+  const en = run(voiceFx("greeting-en", page("Best wishes from the team.")));
+  expect('[3] PLANT: "Best wishes", the en example, fires the en arm (F8)', cands(en, VOICE_FILE, "en") === "Best", candLine(en));
+  const nl = run(voiceFx("greeting-nl", page("Beste klant, welkom."), { lang: "nl" }));
+  expect('[3] PLANT: "Beste klant", the nl example, fires the nl arm (F8)', cands(nl, VOICE_FILE, "nl") === "Beste", candLine(nl));
+}
 if (voiceNotRun.length) console.log(`  NOT RUN (typescript is not installed here; npm ci installs it): ${voiceNotRun.join(" | ")}`);
 
 rmSync(ROOT, { recursive: true, force: true });
@@ -1208,7 +1285,9 @@ console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
 console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2).");
-console.log("And brief S-VC-U1 (C18 [3] the superlative arm by declared register R055, with three regression guards on its em-dash half).");
+console.log("And brief S-VC-U1 (C18 [3] the superlative arm by declared register R055, with three regression guards on its em-dash half),");
+console.log("and the fold of #27's review (C18 string-literal types F1, the typescript bound F3, the lang expression's three copies F5,");
+console.log("the recovered syntax errors F6, the absent lang F7, each arm's own greeting F8).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

@@ -253,16 +253,19 @@ Its planted negatives, green controls and one negative control are in `verify.se
   non-superlative words plus `prachtig` and `hartverwarmend`, run whatever the arm. The old list's
   context exclusions (`as best`, `best practice(s)`, `best effort`, `best of our knowledge`) carry
   over. A word joins a list by a seed release, like any other line of the checker.
-- **Copy, not source.** Each corpus file is parsed with the `typescript` in the site's own
-  `node_modules` (the nearest one from its root upward, never a global one), and the arms match JSX
-  text, string literals and template text, minus module specifiers and the values of `className`,
-  `id`, `key`, `href`, `to`, `src`, `rel`, `type`, `role`, `name` and `data-*`. Identifiers and
-  generics are not copy. With no `typescript` installed the arms read the comment-stripped source, as
+- **Copy, not source.** Each corpus file is parsed with the `typescript` in the `node_modules` at
+  the site's root (never one in a directory above it, never a global one), and the arms match JSX
+  text, string literals and template text, minus module specifiers, string-literal types and the
+  values of `className`, `id`, `key`, `href`, `to`, `src`, `rel`, `type`, `role`, `name` and
+  `data-*`. Identifiers, generics and string-literal types are not copy; a string passed as a call
+  argument is, since no parse can tell it from a label. With no `typescript` installed the arms read the comment-stripped source, as
   before, and a note says so; the gate workflow runs `npm ci` before the gate, so CI parses.
 - **Advisory, always.** Candidates are one `REVIEW` line, per file per arm. One note names the arm,
   the `lang` it came from, the extractor, the corpus by its three roots (`src/content`, `src/routes`
   and `src/components/spine`, `.tsx` and `.ts`) with a per-root count, the strings extracted, and
-  each arm's match count. The em-dash half and its corpus are unchanged.
+  each arm's match count; a second note names any file the parser recovered from syntax errors in,
+  with the count. The REVIEW line's example greeting is the running arm's own (`"Best wishes"`
+  under `en`, `"Beste klant"` under `nl`). The em-dash half and its corpus are unchanged.
 
 ## Release history
 
@@ -278,7 +281,12 @@ move.
   TypeScript parse extracts rather than the raw source, and states its corpus by name with per-root
   counts. English gets `-est` morphology plus a closed stop-list, Dutch a list, hype words a list,
   and every output stays REVIEW. On this seed it reads `en` from `en-GB` and surfaces `closest` in
-  four content files and `Most` in one, where the old list surfaced nothing.
+  four content files and `Most`, a quantifier, in one, where the old list surfaced nothing.
+- **The code review of #27, folded.** A string-literal type is not copy (F1); `typescript` is
+  borrowed from the site's root alone, not from a directory above it (F3); the self-test holds the
+  three copies of the `<html lang>` expression equal (F5); the note names the syntax errors the
+  parser recovered from rather than a throw it never makes (F6); a missing `lang` reads as missing,
+  not as `lang=""` (F7); and the REVIEW line's example greeting is the running arm's own (F8).
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 
