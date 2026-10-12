@@ -49,6 +49,13 @@
 // first, which main leaves unscored because it read --tier-ink as an undeclared token, inert. The
 // two of C17's that hold there are marked REGRESSION GUARD.
 //
+// FOLDED the same day from the code review of PR #26 (F2): a hue carrier slot the markup composes
+// and [2] cannot score is NAMED in a note rather than skipped with no line. C3's undeclared slot is
+// named (its no-pair assertion now reads every line but that note), and C17 gains two plants, the
+// ink declared with no hue and a block grounding on no var(--hue-N), beside a green control naming
+// nothing. Run against #26's head before the fold, 3 of these 4 assertions FAIL; the control that
+// holds there is marked REGRESSION GUARD.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -339,7 +346,13 @@ export const Page = () => <Section tone="paper"><TierCard hue={2}>plan</TierCard
 `,
   });
   const out = run(fx);
-  expect("a carrier on an undeclared hue slot adds no pair", !out.includes("--hue-2"), lineOf(out, "--hue-2"));
+  // the one line that may name --hue-2 is the note naming the slot as unscored (the code review of
+  // #26, F2); any other line naming it is a pair this inert slot added
+  const NAMED = "could not score on a hue ground";
+  const rest = out.split("\n").filter((l) => !l.includes(NAMED)).join("\n");
+  expect("a carrier on an undeclared hue slot adds no pair", !rest.includes("--hue-2"), lineOf(rest, "--hue-2"));
+  expect("and names the slot it could not score, rather than skipping it with no line",
+    notes(out, NAMED) && lineOf(out, NAMED).includes("data-hue-bar=2 (--hue-2 undeclared)"), lineOf(out, NAMED) || "no such note");
 }
 {
   // THE LIST DECAYING IS A FINDING: a spine component shipping a carrier attribute no
@@ -1045,6 +1058,7 @@ export const Page = () => <Section tone="paper"><TierCard hue={1}>plan</TierCard
 `;
 const BAR1 = '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }';
 const ICON = ".tier-card .tier-ico on data-hue-bar=1";
+const UNSCORED = "hue carrier slot(s) composed in the markup that [2] could not score on a hue ground";
 {
   // GREEN CONTROL: the icon is scored in the slot's own ink, through --tier-ink, and passes
   const out = run(build("tier-ink-control", { indexTsx: TIER1 }));
@@ -1052,6 +1066,9 @@ const ICON = ".tier-card .tier-ico on data-hue-bar=1";
     passes(out, `--hue-1-ink on --hue-1 [${ICON} (--tier-bar; ink --tier-ink -> --hue-1-ink)] = 9.89`), lineOf(out, `[${ICON}`));
   // REGRESSION GUARD, not a control on its own: main scored nothing on this ground at all
   expect("and scores no --on-dark on that hue", !failsAny(out, "--on-dark on --hue-1"), verdicts(out, "FAIL").join(" | "));
+  // GREEN CONTROL for the two plants at the end of this case, and a REGRESSION GUARD (#26's head
+  // named no slot at all): a slot it scores is not named unscored
+  expect("and names no composed slot it could not score", !out.includes(UNSCORED), lineOf(out, UNSCORED));
 }
 {
   // PLANT, and a REGRESSION GUARD: the icon paints --on-dark directly, the spine before the W-tier
@@ -1082,6 +1099,26 @@ const ICON = ".tier-card .tier-ico on data-hue-bar=1";
   expect("[2] scores the icon whichever property the slot's block sets first",
     passes(out, `--hue-1-ink on --hue-1 [${ICON} (--tier-bar; ink --tier-ink -> --hue-1-ink)] = 9.89`), lineOf(out, "hue carriers beyond"));
 }
+// FOLDED from the code review of #26 (F2): the bar and the ink fall back independently, so a skin
+// that declares --hue-1-ink and NOT --hue-1 paints that ink on the --accent fallback (#143a6b on
+// #b34700, 2.07), a pair the carrier loop cannot score. Each plant must be NAMED in a note, where
+// #26's head skipped the slot with no line at all.
+{
+  // PLANT: the ink declared, the hue not
+  const out = run(build("tier-ink-orphan", { indexTsx: TIER1, tokens: TOKENS.replace("  --hue-1: #e6f0ff;\n", "") }));
+  expect("[2] names a composed slot whose hue is undeclared and whose block still reads the declared ink",
+    notes(out, UNSCORED) && lineOf(out, UNSCORED).includes("data-hue-bar=1 (--hue-1 undeclared; its block still reads the declared --hue-1-ink,"),
+    lineOf(out, UNSCORED) || "no such note");
+}
+{
+  // PLANT: the slot's block grounds on a name that is not the slot itself, which the ground match
+  // (`var(--hue-N,` or `var(--hue-N)`) reads as no ground at all
+  const out = run(build("tier-ink-offslot", { indexTsx: TIER1,
+    spineCss: SPINE_CSS.replace(BAR1, '.tier-card[data-hue-bar="1"] { --tier-bar: var(--hue-1-soft, var(--accent)); --tier-ink: var(--hue-1-ink, var(--on-dark)); }') }));
+  expect("[2] names a composed slot whose block grounds on no var(--hue-N)",
+    notes(out, UNSCORED) && lineOf(out, UNSCORED).includes("data-hue-bar=1 (its block grounds on no var(--hue-1)"),
+    lineOf(out, UNSCORED) || "no such note");
+}
 
 rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} assertion(s) passed, ${fail} failed, over ${caseNo} fixture(s).`);
@@ -1093,7 +1130,8 @@ console.log("ground, C10 bare form and sweeps, C11 cascade, C12 [4] link-preview
 console.log("(C13 skins and every declared hue slot R110, C14 [5] route paths R111, C15 component hue grounds R063,");
 console.log("C16 [11] build output R109), and the fold of #25's review (C13 partial slot pairs F1 and the base slot");
 console.log("note F4, C15 the R063 markup scope F5, C16 a linked file with no copy F2), and brief W-tier");
-console.log("(C17 the tier icon in its slot's own ink through --tier-ink).");
+console.log("(C17 the tier icon in its slot's own ink through --tier-ink), and the fold of #26's review (C3 and");
+console.log("C17 a composed carrier slot [2] cannot score named in a note, F2).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

@@ -690,6 +690,10 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
     // and declares a colour. A selector with no colour (the 6px ::before rule) grounds no text and
     // is not a pair.
     const carrierPairs = [];
+    // a composed slot the loop below cannot score is NAMED, never skipped in silence (the code
+    // review of #26, F2): the ground falls back where the hue is undeclared while the block may
+    // still resolve an ink of the slot's own family, a pair no line below asserts
+    const unscored = [];
     // the ink a rule's `color` paints on slot n: each name in its var() chain in order, a custom
     // property the carrier's own block sets for that slot (--tier-ink) expanded through that block's
     // value, and otherwise the first name the skin declares. `via` collects the block properties it
@@ -741,7 +745,15 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
       for (const n of [...used].sort()) {
         const prop = props.get(n);
         const hue = `--hue-${n}`;
-        if (!prop || (!T[hue] && !TA[hue])) continue;      // undeclared slot stays inert (S4.6)
+        if (!prop || (!T[hue] && !TA[hue])) {              // undeclared slot stays inert (S4.6), and is named
+          const reads = [...(decls.get(n) || new Map()).values()].flatMap((v) => [...v.matchAll(/(--[\w-]+)/g)].map((x) => x[1]));
+          const own = [...new Set(reads)].filter((t) => t.startsWith(`${hue}-`) && (T[t] || TA[t]));
+          const why = !decls.has(n) ? `spine.css has no [${c.attr}="${n}"] block`
+            : !prop ? `its block grounds on no var(${hue})` : `${hue} undeclared`;
+          const ink = own.length ? `; its block still reads the declared ${own.join(", ")}, painted on a ground no pair asserts` : "";
+          unscored.push(`${c.attr}=${n} (${why}${ink})`);
+          continue;
+        }
         composedHues.add(n);
         groundRoutes.carrier.add(n);
         for (const r of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -760,6 +772,8 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
     for (const pr of carrierPairs) NORMAL_PAIRS.push(pr);
     if (carrierPairs.length) note(`hue carriers beyond <Section hue>: ${carrierPairs.length} pair(s) added -- ` +
       carrierPairs.map((x) => `${x[0]} on ${x[1]} via ${x[2]}`).join(" | "));
+    if (unscored.length) note(`hue carrier slot(s) composed in the markup that [2] could not score on a hue ground: ` +
+      unscored.join(" | "));
     // (iii) the list decaying is a FINDING. Any data-hue* attribute the spine layer ships that no
     // HUE_CARRIERS entry names is a ground nothing above scores, and saying so is how the next
     // carrier gets added instead of being missed.
