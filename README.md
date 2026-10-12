@@ -147,8 +147,11 @@ intent: consumed=none supplied; looked-for=scope and emphasis
 `[2]`'s composed-ground discovery reads a LIST of hue carriers, `HUE_CARRIERS` in `verify.mjs`, one
 line per markup attribute that puts a `--hue-N` slot under something: `data-hue` (`<Section hue>`,
 handled through the `[data-hue]` cascade) and `data-hue-bar` (`<TierCard hue>`, whose
-`.tier-card .tier-ico` hardcodes `color: var(--on-dark)` on that ground). **Extend it by adding a
-line**, naming the component that renders the attribute and the `spine.css` anchor that grounds it.
+`.tier-card .tier-ico` paints `var(--tier-ink, var(--on-dark))` on that ground, `--tier-ink` being
+the slot's own `--hue-N-ink`, set by each `[data-hue-bar="N"]` block; `[2]` scores the icon through
+that chain, so a skin that declares the hue and no ink is scored on its `--on-dark` fallback).
+**Extend it by adding a line**, naming the component that renders the attribute and the
+`spine.css` anchor that grounds it.
 A `data-hue*` attribute that no entry names is reported as UNSCORED rather than silently skipped,
 so the list decaying is a finding. The sweep reads the spine components, every attribute selector
 in `spine.css` and the content and route markup, because a carrier need not have a component
@@ -240,6 +243,26 @@ Each one has a planted negative and a green control in `verify.selftest.mjs` (C1
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief W-tier: the tier icon reads its slot's own ink)
+
+One spine file moves, `src/styles/spine.css`. The Factory re-embeds this release at the next
+site-contract cut after 1.8.31, whose number the controller sets at the stamp, and each site takes
+it at its re-pin.
+
+- **W-tier** (ruled 2026-10-12 by seat `controller-2026-10-11`, as `AISmithFactory/zuidgeluid-site`
+  #57 recommends) Each `.tier-card[data-hue-bar="N"]` block also sets
+  `--tier-ink: var(--hue-N-ink, var(--on-dark))`, and `.tier-card .tier-ico` paints
+  `var(--tier-ink, var(--on-dark))` where it painted `--on-dark` on every slot. A skin that declares
+  `--hue-N-ink` now carries that ink on the icon; one that declares the hue and no ink keeps
+  `--on-dark`. `[2]`'s carrier scoring follows `--tier-ink` through the slot's own block, names the
+  route in the pair's label, and reads the ground property from the slot itself (`var(--hue-N,` or
+  `var(--hue-N)`), so an ink property set first is never taken for it. `verify.selftest.mjs` C17
+  holds it: three plants that put `--on-dark` on a light hue go red, two controls stay green.
+- **The code review of #26, folded.** A hue carrier slot the markup composes and `[2]` cannot score
+  (its hue undeclared, or its block grounding on no `var(--hue-N)`) is named in a note rather than
+  skipped with no line, and the note names an ink of the slot's own family the block still reads,
+  painted on a ground no pair asserts (F2); this entry names the Factory re-embed (F1).
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 
