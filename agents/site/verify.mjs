@@ -22,7 +22,8 @@
 //   - CI as a required status check.
 // Per as-agent-fleet.md Section 8: build the gate once, share it; never re-encode it.
 //
-// Zero dependencies. Node 18+.  Usage:
+// Zero dependencies. Node 18+. ([3]'s voice arm borrows the SITE's own `typescript` when it
+// resolves, and reads the comment-stripped source when it does not.)  Usage:
 //   node verify.mjs [repoRoot] --seed <seedRoot> [--charter <file>] [--brief <file>]
 //                   [--base <ref>] [--ci]
 //   exit 0 = all hard checks pass | exit 1 = a hard check failed
@@ -44,9 +45,10 @@
 //            HARD FAIL, not a warning. CI must pass --ci.
 
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative, basename, dirname } from "node:path";
+import { join, relative, basename, dirname, resolve, sep } from "node:path";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 
 const args = process.argv.slice(2);
 // Flags that CONSUME the next argv. Without this set a flag's VALUE looks like a bare
@@ -1340,21 +1342,127 @@ for (const f of copyFiles) {
 if (emDash) bad(`${emDash} em-dash(es) in rendered copy (literal or entity): ${emFiles.join(", ")}`);
 else ok("no em-dashes in rendered copy (literal or entity; comments exempt, S9.4)");
 
-// Dutch stems: the list is half Dutch already, but `best` was English-only, so `beste`
-// (the ordinary Dutch superlative) passed a gate whose whole job is superlatives.
-// Found on zuidgeluid.be 2026-08-02 by a second reader, not by the checker.
-// "best" is the noisy one: "as best we reasonably can" is a liability hedge and
-// "best practice" is a term of art -- neither is a marketing claim, and both were failing
-// this gate. Excluded by context rather than dropped from the list, so promotional uses
-// ("the best CRM") still surface.
-const SUPER = /(?<!\bas\s)\b(uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|best|beste|finest|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
-const superHits = [];
-for (const f of copyFiles) {
-  const body = stripComments(read(f) || "");
-  const hits = [...body.matchAll(SUPER)].map((m) => m[0]);
-  if (hits.length) superHits.push(`${relative(ROOT, f)}: ${[...new Set(hits)].join(", ")}`);
+// THE SUPERLATIVE HALF, BY DECLARED REGISTER (R055; Factory plan-voice-check-2026-10-11 v0.2,
+// unit U1). One regex of 26 words, Dutch and English mixed, used to run over every file's raw
+// source here: no register, no morphology, no stop-list, and because the corpus is SOURCE, code
+// reached it on every site (aismith-site's only candidate was the identifier `const unique`).
+//
+//   REGISTER. The arm is chosen by the <html lang> __root hard-sets, the declaration [4] already
+//     holds every site to (ruled 2026-10-12, Q1 (a)), by its PRIMARY subtag, so the seed's own
+//     `en-GB` selects `en` (ruled F9). Any other language, or none, runs the hype list alone and
+//     says so as REVIEW: never soft() and never bad(), because S9.3 is IMPORTANT and soft() fails
+//     closed under --ci. A missing lang is [4]'s to fail, not this arm's.
+//   WHAT IS MATCHED. COPY, not source (ruled Q2 (a)): a TypeScript parse of each corpus file
+//     collects JSX text, string literals and template text, minus module specifiers, string-literal
+//     TYPES (`<K extends "onRequest">`) and the values of the non-copy JSX attributes in
+//     VOICE_NON_COPY_ATTRS. A string passed as a call argument (`toggle("onRequest")`) is still
+//     read as copy: no parse can tell it from a label. `typescript` is borrowed from the
+//     node_modules at the SITE's root, so this file keeps no dependency of its own; where the site
+//     has none, the arm reads the comment-stripped body as before and says so in a note. It never
+//     fails.
+//   THE LISTS, each CLOSED. English: `-est` morphology plus four irregulars, minus a stop-list of
+//     the eight non-superlatives measured in the two English corpora. Dutch: the superlative forms
+//     measured in the two Dutch corpora, `aller...ste`, and the analytic `meest <adjective>`, while
+//     ordinals, adjectival `-ste` and the quantifier `meeste` stay out (morphology was measured 60
+//     percent wrong on Dutch). Hype: the old list's non-superlative words plus `prachtig` and
+//     `hartverwarmend`, run whatever the arm, because copy says AMAZING in any language.
+//   Every output is review() (S9.5): under-coverage here costs a missed prompt, not a false pass.
+//
+// The old list's three context exclusions carry over unchanged, onto the English arm and the hype
+// list: "as best we reasonably can" is a liability hedge, "best practice(s)", "best effort" and
+// "best of our knowledge" are terms of art, so they are excluded by context rather than by dropping
+// the word, and "the best CRM" still surfaces. The em-dash half above never reads the parse.
+const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"];
+const VOICE_ARMS = {
+  en: { re: /(?<!\bas\s)(?<!\p{L})(?:\p{L}+est|best|most|least|worst)(?!\p{L})(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/giu,
+        keep: (w) => !VOICE_STOP_EN.includes(w.toLowerCase()) },
+  nl: { re: /(?<!\p{L})(?:beste|grootste|mooiste|verste|liefste|leukste|zotste|slimste|schattigste|lelijkste|oudste|jongste|enigste|aller\p{L}+ste|meest\s+\p{L}+)(?!\p{L})/giu,
+        keep: () => true },
+};
+const VOICE_HYPE = /(?<!\bas\s)\b(?:uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|prachtig|hartverwarmend|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
+const VOICE_NON_COPY_ATTRS = new Set(["className", "id", "key", "href", "to", "src", "rel", "type", "role", "name"]);
+// [4]'s own expression for the lang __root hard-sets, read the same way, raw. The file holds it
+// three times, here, in [4] and in [4]'s og:locale check, and C18 in verify.selftest.mjs fails
+// unless all three are byte-identical: change all three together.
+const voiceLang = ((read(P.root) || "").match(/<html\s+lang=["']([a-zA-Z-]+)["']/) || [])[1] || null;
+const voicePrimary = voiceLang ? voiceLang.split("-")[0].toLowerCase() : null;
+const voiceArms = voicePrimary && Object.hasOwn(VOICE_ARMS, voicePrimary) ? [voicePrimary] : [];
+// The site's own copy only: node_modules/typescript at the site's ROOT, where `npm ci` installs
+// it, and neither one in a directory above the root nor the global folders (NODE_PATH and the
+// like) that require() would also consult, so the extractor this gate uses is a fact about the
+// tree and not about the machine it runs on.
+let voiceTs = null, voiceTsAt = null, voiceTsWhy = "no node_modules/typescript at the site's root";
+const voiceTsDir = join(resolve(ROOT), "node_modules", "typescript");
+if (existsSync(join(voiceTsDir, "package.json"))) {
+  voiceTsAt = relative(ROOT, voiceTsDir).replace(/\\/g, "/");
+  try {
+    const ts = createRequire(import.meta.url)(voiceTsDir);
+    if (typeof ts.createSourceFile === "function") voiceTs = ts;
+    else voiceTsWhy = `${voiceTsAt} exports no createSourceFile`;
+  } catch { voiceTsWhy = `${voiceTsAt} did not load`; }
 }
-if (superHits.length) review(`superlative candidates -- ADVISORY, never blocks ("Beste klant" is fine, so is a liability hedge): ${superHits.join(" | ")}`);
+// The copy one file carries, as a list of strings, and how many syntax errors the parser
+// recovered from on the way (createSourceFile does not throw on malformed source: it recovers and
+// records each error in parseDiagnostics, so the count is the fact worth stating).
+function voiceCopy(ts, file, text) {
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const strings = [], skip = new Set();
+  const visit = (n) => {
+    if (skip.has(n)) return;
+    if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n.moduleSpecifier) skip.add(n.moduleSpecifier);
+    else if (ts.isImportEqualsDeclaration(n) && ts.isExternalModuleReference(n.moduleReference)) skip.add(n.moduleReference.expression);
+    else if (ts.isCallExpression(n) && n.arguments.length &&
+      (n.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(n.expression) && n.expression.text === "require"))) skip.add(n.arguments[0]);
+    else if (ts.isImportTypeNode(n)) skip.add(n.argument);
+    else if (ts.isModuleDeclaration(n) && ts.isStringLiteral(n.name)) skip.add(n.name);
+    else if (ts.isLiteralTypeNode(n) && ts.isStringLiteral(n.literal)) skip.add(n.literal); // a string-literal TYPE is not copy
+    else if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) &&
+      (VOICE_NON_COPY_ATTRS.has(n.name.text) || n.name.text.startsWith("data-"))) return; // markup, not copy
+    if (ts.isJsxText(n)) { if (!n.containsOnlyTriviaWhiteSpaces) strings.push(n.text); }
+    else if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) ||
+      ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) strings.push(n.text);
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return { strings, errors: sf.parseDiagnostics?.length ?? 0 };
+}
+const voiceRun = [...voiceArms, "hype"];
+const voiceCount = Object.fromEntries(voiceRun.map((a) => [a, 0]));
+const voiceHits = [], voiceParseErrors = [];
+let voiceStrings = 0;
+for (const f of copyFiles) {
+  const src = read(f) || "";
+  let texts;
+  if (voiceTs) {
+    const { strings, errors } = voiceCopy(voiceTs, f, src);
+    texts = strings; voiceStrings += strings.length;
+    if (errors) voiceParseErrors.push(`${relative(ROOT, f)} (${errors})`);
+  } else texts = [stripComments(src)];
+  for (const arm of voiceRun) {
+    const re = arm === "hype" ? VOICE_HYPE : VOICE_ARMS[arm].re;
+    const hits = texts.flatMap((t) => [...t.matchAll(re)].map((m) => m[0].replace(/\s+/g, " ")))
+      .filter(arm === "hype" ? () => true : VOICE_ARMS[arm].keep);
+    voiceCount[arm] += hits.length;
+    if (hits.length) voiceHits.push(`${relative(ROOT, f)} [${arm}]: ${[...new Set(hits)].join(", ")}`);
+  }
+}
+if (!voiceArms.length) review(`register: no arm for lang=${voiceLang ?? "(none)"} -- the arms are ${Object.keys(VOICE_ARMS).join(" and ")}, ` +
+  `chosen by the primary subtag of the <html lang> __root hard-sets, so only the hype list ran`);
+const voiceRoots = [["src/content", P.content], ["src/routes", P.routes], ["src/components/spine", P.spineDir]];
+note(`voice arm=${voiceArms[0] ?? "none"}${voiceLang ? ` from <html lang="${voiceLang}"> in src/routes/__root.tsx (primary subtag)`
+  : `, src/routes/__root.tsx hard-sets no <html lang="..">`}, plus the hype list; ` +
+  `extractor: ${voiceTs ? `TypeScript parse (typescript ${voiceTs.version}, ${voiceTsAt}), ${voiceStrings} string(s) extracted` : "comment-stripped source (FALLBACK)"}; ` +
+  `corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, ${copyFiles.length} file(s): ` +
+  `${voiceRoots.map(([name, dir]) => `${name} ${copyFiles.filter((f) => f.startsWith(dir + sep)).length}`).join(", ")}; ` +
+  `matches: ${voiceRun.map((a) => `${a} ${voiceCount[a]}`).join(", ")}`);
+if (!voiceTs) note(`voice extractor FALLBACK: ${voiceTsWhy}, so the arms read each file's comment-stripped source, code ` +
+  `included, and identifiers can surface as candidates (npm ci installs it where the site lists it)`);
+if (voiceParseErrors.length) note(`voice extractor: the parse recovered from syntax errors in ${voiceParseErrors.join(", ")}, ` +
+  `and those files' copy is read as the parser recovered it`);
+// The example is the running arm's own greeting: "Beste klant" is no candidate under en, where
+// "Best wishes" is.
+const voiceGreeting = { en: '"Best wishes"', nl: '"Beste klant"' }[voiceArms[0]] ?? "a greeting";
+if (voiceHits.length) review(`superlative candidates -- ADVISORY, never blocks (${voiceGreeting} is fine, so is a liability hedge): ${voiceHits.join(" | ")}`);
 else ok("no superlative candidates");
 
 // == 4. PER-ROUTE META + LANG + NOINDEX + TITLE UNIQUENESS ==
