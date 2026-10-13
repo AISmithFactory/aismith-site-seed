@@ -82,7 +82,7 @@ env:
 
 jobs:
   site-verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout site repo (full history for the scoped-diff base)
         uses: actions/checkout@v4
