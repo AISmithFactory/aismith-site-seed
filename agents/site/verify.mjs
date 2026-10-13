@@ -1329,18 +1329,32 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
 }
 
 // == 3. VOICE -- em-dash literal AND entity forms (auditor hardening) ==
+// EVERY FORM, NOT FOUR (Factory backlog row "the site seed's em-dash gate misses ...", brief
+// siteseed-emdash of 2026-10-13). This half read U+2014, &mdash;, &#8212; and &#x2014; alone, so
+// &#08212;, an &#8212 with no semicolon and a lookalike all reached a site's copy past it: the blind
+// spot F2 of the code review of AISmithFactory/aismith-hub-seed #161 found, which that seed's
+// public.site_has_em_dash() folded. It now reads U+2014 and its lookalikes U+2015 (horizontal bar),
+// U+2E3A and U+2E3B (the two- and three-em dash), U+FE31 (the vertical em dash) and U+FE58 (the small
+// em dash), literal, and every entity form of the six, case-insensitive: named (&mdash, &horbar),
+// decimal and hex, with any leading zeros and with or without the semicolon. A digit after the
+// number ends no match, so &#82120; is not &#8212. An en dash (U+2013) and a hyphen are none of
+// these. A FAIL names the forms it found, since a lookalike is hard to see in an editor.
 out.push("\n[3] VOICE -- zero prose em-dashes (literal + entity); superlatives flagged");
 const copyFiles = [...walk(P.content, [".tsx", ".ts"]), ...walk(P.routes, [".tsx", ".ts"]), ...walk(P.spineDir, [".tsx", ".ts"])];
-let emDash = 0; const emFiles = [];
-const EM = String.fromCharCode(0x2014); // the em-dash, by code point (keep this file ASCII)
+let emDash = 0; const emFiles = []; const emForms = new Set();
+// by escape, not by character, so this file stays ASCII
+const EM_LITERAL = /[\u2014\u2015\u2e3a\u2e3b\ufe31\ufe58]/g;
+const EM_ENTITY = /&(?:mdash|horbar);?|&#0*(?:8212|8213|11834|11835|65073|65112)(?![0-9]);?|&#x0*(?:2014|2015|2e3a|2e3b|fe31|fe58)(?![0-9a-f]);?/gi;
 for (const f of copyFiles) {
   const body = stripComments(read(f) || "");
-  const litRe = new RegExp(EM, "g");
-  const n = (body.match(litRe) || []).length + (body.match(/&mdash;|&#8212;|&#x2014;/gi) || []).length;
+  const lit = body.match(EM_LITERAL) || [], ent = body.match(EM_ENTITY) || [];
+  for (const c of lit) emForms.add("U+" + c.codePointAt(0).toString(16).toUpperCase());
+  for (const e of ent) emForms.add(e);
+  const n = lit.length + ent.length;
   if (n) { emDash += n; emFiles.push(relative(ROOT, f)); }
 }
-if (emDash) bad(`${emDash} em-dash(es) in rendered copy (literal or entity): ${emFiles.join(", ")}`);
-else ok("no em-dashes in rendered copy (literal or entity; comments exempt, S9.4)");
+if (emDash) bad(`${emDash} em-dash(es) in rendered copy (literal or entity): ${emFiles.join(", ")}; forms: ${[...emForms].join(", ")}`);
+else ok("no em-dashes in rendered copy (U+2014 and its five lookalikes, literal or any entity form; comments exempt, S9.4)");
 
 // THE SUPERLATIVE HALF, BY DECLARED REGISTER (R055; Factory plan-voice-check-2026-10-11 v0.2,
 // unit U1). One regex of 26 words, Dutch and English mixed, used to run over every file's raw
