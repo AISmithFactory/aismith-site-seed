@@ -79,6 +79,17 @@
 // message already named it) and the two greetings firing their arms. Six of the 15 need a
 // `typescript` and are named NOT RUN without one, as the three above are.
 //
+// EXTENDED 2026-10-13 (brief siteseed-emdash, the Factory backlog row on the site seed's em-dash gate)
+// by the half THAT run widened: C19 [3]'s em-dash half reads every form, not four. Thirteen PLANTs,
+// one form each, FAIL and name their form: a decimal entity with a leading zero and a hex one with
+// several, three entities with no semicolon (decimal, hex and named), the five lookalikes U+2015,
+// U+2E3A, U+2E3B, U+FE31 and U+FE58 literal, and three of their entity forms (named, decimal and hex).
+// A fourteenth holds the count and the forms over one file holding three. Three GREEN CONTROLs pass: an
+// en dash, a hyphen and the en dash's entities; a number that only begins with the em dash's digits
+// and an escaped &amp;mdash;; and a lookalike and an entity in comments. Run against the verify.mjs
+// of main before that run, 14 of these 17 assertions FAIL, every PLANT reading PASS "no em-dashes"
+// there; the three that hold are the GREEN CONTROLs.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -291,7 +302,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27) and 2026-10-13 (the [3] em-dash half, every form)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -1369,6 +1380,59 @@ const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijk
   const nl = run(voiceFx("greeting-nl", page("Beste klant, welkom."), { lang: "nl" }));
   expect('[3] PLANT: "Beste klant", the nl example, fires the nl arm (F8)', cands(nl, VOICE_FILE, "nl") === "Beste", candLine(nl));
 }
+
+// ---- C19. brief siteseed-emdash: [3]'s em-dash half reads every form, not four ------------------
+// Each PLANT is the base site plus ONE copy file under src/content holding ONE form, so a red is
+// attributable to that form; it goes red by FAILING "em-dash(es) in rendered copy" and naming the
+// form it found. Each GREEN CONTROL reads PASS "no em-dashes in rendered copy". The code points are
+// written as escapes, so this file stays ASCII.
+{
+  const emFails = (name, copy, form, label) => {
+    const out = run(voiceFx(`emdash-${name}`, page(copy)));
+    expect(`[3] PLANT: ${label} FAILS, naming its form`,
+      fails(out, "em-dash(es) in rendered copy") && lineOf(out, "em-dash(es)").endsWith(`forms: ${form}`), lineOf(out, "in rendered copy"));
+  };
+  // leading zeros, decimal and hex
+  emFails("zero-dec", "Plain copy &#08212; with a dash.", "&#08212;", "a decimal entity with a leading zero, &#08212;");
+  emFails("zeros-hex", "Plain copy &#x0002014; with a dash.", "&#x0002014;", "a hex entity with leading zeros, &#x0002014;");
+  // no semicolon, decimal, hex and named
+  emFails("nosemi-dec", "Plain copy &#8212 with a dash.", "&#8212", "a decimal entity with no semicolon, &#8212");
+  emFails("nosemi-hex", "Plain copy &#X2014 with a dash.", "&#X2014", "a hex entity with no semicolon, &#X2014");
+  emFails("nosemi-named", "Plain copy &mdash with a dash.", "&mdash", "a named entity with no semicolon, &mdash");
+  // the five lookalikes, literal
+  for (const [cp, what] of [["2015", "the horizontal bar"], ["2E3A", "the two-em dash"], ["2E3B", "the three-em dash"],
+    ["FE31", "the vertical em dash"], ["FE58", "the small em dash"]]) {
+    emFails(`u${cp.toLowerCase()}`, `Plain copy ${String.fromCharCode(parseInt(cp, 16))} with a dash.`, `U+${cp}`, `U+${cp}, ${what}, literal`);
+  }
+  // and a lookalike's entity forms: named, decimal and hex
+  emFails("horbar", "Plain copy &horbar; with a dash.", "&horbar;", "&horbar;, the horizontal bar's named entity");
+  emFails("small-dec", "Plain copy &#65112; with a dash.", "&#65112;", "&#65112;, the small em dash in decimal");
+  emFails("three-hex", "Plain copy &#x2e3b; with a dash.", "&#x2e3b;", "&#x2e3b;, the three-em dash in hex");
+  {
+    // the count and the forms over one file holding three forms, the literal named by code point
+    const out = run(voiceFx("emdash-three", page(`One ${String.fromCharCode(0xfe58)} two &#08212; three &#8212 four.`)));
+    expect("[3] PLANT: three forms in one file FAIL as a count of 3, each form named once",
+      lineOf(out, "em-dash(es)").includes("3 em-dash(es) in rendered copy (literal or entity): src/content/voice.tsx; forms: U+FE58, &#08212;, &#8212"),
+      lineOf(out, "in rendered copy"));
+  }
+  {
+    // GREEN CONTROL: an en dash, a hyphen and the en dash's entities are none of these
+    const out = run(voiceFx("emdash-en-dash", page(`Plain copy ${String.fromCharCode(0x2013)} with an en dash - and &ndash; and &#8211; and &#x2013.`)));
+    expect("[3] GREEN CONTROL: an en dash, a hyphen and its entities pass", passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
+  }
+  {
+    // GREEN CONTROL: a number that only begins with the em dash's digits is another code point
+    const out = run(voiceFx("emdash-longer", page("Plain copy &#82120; and &#x20140; and &#x2014a; and &amp;mdash; as text.")));
+    expect("[3] GREEN CONTROL: &#82120;, &#x20140;, &#x2014a; and &amp;mdash; pass (a digit after the number ends no match)",
+      passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
+  }
+  {
+    // GREEN CONTROL: a lookalike and a leading-zero entity in comments, which are exempt (S9.4)
+    const out = run(voiceFx("emdash-lookalike-comment",
+      `// a comment ${String.fromCharCode(0x2015)} is exempt\n/* so is &#08212 */\n` + page("Plain copy.")));
+    expect("[3] GREEN CONTROL: a lookalike and an entity in comments pass", passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
+  }
+}
 if (voiceNotRun.length) console.log(`  NOT RUN (typescript is not installed here; npm ci installs it): ${voiceNotRun.join(" | ")}`);
 
 rmSync(ROOT, { recursive: true, force: true });
@@ -1386,6 +1450,8 @@ console.log("C17 a composed carrier slot [2] cannot score named in a note, F2)."
 console.log("And brief S-VC-U1 (C18 [3] the superlative arm by declared register R055, with three regression guards on its em-dash half),");
 console.log("and the fold of #27's review (C18 string-literal types F1, the typescript bound F3, the lang expression's three copies F5,");
 console.log("the recovered syntax errors F6, the absent lang F7, each arm's own greeting F8).");
+console.log("And brief siteseed-emdash (C19 [3]'s em-dash half: leading-zero and semicolon-less entities, and U+2015,");
+console.log("U+2E3A, U+2E3B, U+FE31 and U+FE58 literal and as entities).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

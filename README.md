@@ -270,9 +270,41 @@ Its planted negatives, green controls and one negative control are in `verify.se
   with the count. The REVIEW line's example greeting is the running arm's own (`"Best wishes"`
   under `en`, `"Beste klant"` under `nl`). The em-dash half and its corpus are unchanged.
 
+### What `[3]`'s em-dash half gained on 2026-10-13 (brief siteseed-emdash)
+
+Its planted negatives and green controls are in `verify.selftest.mjs` (C19).
+
+- **Every form, not four.** The half read U+2014, `&mdash;`, `&#8212;` and `&#x2014;` alone, so a
+  leading-zero entity (`&#08212;`), one with no semicolon (`&#8212`, `&mdash`) and a lookalike all
+  passed it. It now reads U+2014 and its lookalikes U+2015 (the horizontal bar), U+2E3A and U+2E3B
+  (the two- and three-em dash), U+FE31 (the vertical em dash) and U+FE58 (the small em dash),
+  literal, and every entity form of the six, case-insensitive: named (`&mdash`, `&horbar`), decimal
+  and hex, with any leading zeros and with or without the semicolon. A digit after the number ends
+  no match (`&#82120;` is another code point), and an en dash (U+2013) and a hyphen are none of these.
+- **The hub seed's rule, less one step.** It is the set `aismith-hub-seed`'s
+  `public.site_has_em_dash()` refuses in a site feed's public fields (F2 of the code review of hub
+  seed #161). That function NFKC-normalises first; this half does not, because the only two code
+  points NFKC folds to U+2014 are U+FE31 and U+FE58 (measured over every code point, Unicode 14.0),
+  and both are listed here by name.
+- **A FAIL names the forms it found** after the files (`forms: U+FE58, &#08212;`), since a lookalike
+  is hard to see in an editor, and the PASS line names what it read. Comments stay exempt (S9.4), and
+  the corpus is unchanged.
+
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-13, brief siteseed-emdash: the `[3]` em-dash half reads every form)
+
+No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
+move. Measured on this run, the new half finds nothing in `aismith-site` (`2e3fd8ae`, 49 corpus
+files) or `cafe-josee-site` (`c725d6b5`, 28), so neither goes red when it takes this release;
+`zuidgeluid-site` and `sz-site` were not read.
+
+- **The Factory backlog row on the site seed's em-dash gate.** `[3]`'s em-dash half refuses a
+  numeric entity with leading zeros, an entity with no semicolon, and U+2015, U+2E3A, U+2E3B, U+FE31
+  and U+FE58, literal and in every entity form, each with a planted negative and with three green
+  controls beside them (C19). A FAIL names the forms it found.
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief S-VC-U1: the `[3]` voice check by declared register)
 
