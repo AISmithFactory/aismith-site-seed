@@ -90,6 +90,17 @@
 // of main before that run, 14 of these 17 assertions FAIL, every PLANT reading PASS "no em-dashes"
 // there; the three that hold are the GREEN CONTROLs.
 //
+// EXTENDED 2026-10-14 (brief siteseed-voice-json, Factory backlog row 1897) by the corpus THAT run
+// widened: C20 [3] reads the string values of src/content/*.json as copy, in both halves. Six PLANTs,
+// each a string that exists only in JSON, go red: a superlative and a value at depth surface in the
+// REVIEW line, a literal em-dash and its JSON escape FAIL naming the file, a superlative fires with no
+// typescript installed, and one in a file that does not parse fires beside the note naming it. Two
+// GREEN CONTROLs: a clean JSON file passes both halves with its keys silent, and a site with no JSON
+// is counted at zero. A SCOPE GUARD holds a JSON file below the top level out, and the NEGATIVE
+// CONTROL is a mutant with the JSON list emptied, under which both plants read PASS. Run against the
+// verify.mjs of main before that run, 13 of these 17 assertions FAIL; the four that hold are the
+// clean file's two PASS verdicts and the two NEGATIVE CONTROL reads, main having no JSON read to remove.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -302,7 +313,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27) and 2026-10-13 (the [3] em-dash half, every form)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27) and 2026-10-13 (the [3] em-dash half, every form) and 2026-10-14 (the [3] corpus, the string values of src/content/*.json)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -1433,6 +1444,83 @@ const NL = page("De mooiste avond van het jaar.", "Een van de meest toegankelijk
     expect("[3] GREEN CONTROL: a lookalike and an entity in comments pass", passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
   }
 }
+
+// ---- C20. Factory backlog row 1897 (brief siteseed-voice-json): [3] reads src/content/*.json ------
+// Each fixture is the base site plus ONE JSON file under src/content holding the case's string. A
+// PLANT is a string that exists only in that JSON: a superlative goes red by surfacing under the JSON
+// file in the [3] REVIEW line, an em-dash by FAILING and naming the file. A GREEN CONTROL reads PASS
+// on both halves. The NEGATIVE CONTROL is verify.mjs with the JSON list emptied, which is main before
+// this run: the same plants read PASS there.
+const JSON_FILE = "src/content/voice.json";
+const json = (v) => JSON.stringify(v, null, 2) + "\n";
+const jsonFx = (name, body, opts = {}) => voiceFx(`json-${name}`, body, { file: JSON_FILE, ...opts });
+const EMJ = String.fromCharCode(0x2014);
+const JSON_SUP = json({ title: "The newest way to book a table." });
+const JSON_EM = json({ title: `Plain copy ${EMJ} with a dash.` });
+{
+  // GREEN CONTROL: no JSON file, and the corpus line still names the JSON half, at zero
+  const out = run(build("json-none", { ts: true }));
+  expect("[3] the corpus line names the string values of src/content/*.json, at zero where there are none",
+    lineOf(out, "voice arm=").includes("src/components/spine 1, and the string values of src/content/*.json, 0 file(s), 0 string(s); matches:"), lineOf(out, "voice arm="));
+}
+{
+  // GREEN CONTROL: a clean JSON file is read and passes both halves; its keys are lookups, not copy,
+  // so a superlative key and an em-dash key are silent; numbers and booleans are not strings
+  const out = run(jsonFx("control", json({ newest: "A plain line.", [`a${EMJ}b`]: "Plain.", list: ["Plain.", { deep: "Plain too." }], n: 3, ok: true })));
+  expect("[3] GREEN CONTROL: a clean JSON file reads no superlative candidates, its keys silent", passes(out, "no superlative candidates"), candLine(out));
+  expect("[3] GREEN CONTROL: a clean JSON file reads no em-dash, its keys silent", passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
+  expect("[3] the corpus line counts the JSON file and its four string values beside the *.tsx and *.ts roots",
+    lineOf(out, "voice arm=").includes("4 file(s): src/content 1, src/routes 2, src/components/spine 1, and the string values of src/content/*.json, 1 file(s), 4 string(s)"),
+    lineOf(out, "voice arm="));
+}
+{
+  // PLANT: a superlative that exists only in a JSON string value surfaces under the JSON file, REVIEW
+  const out = run(jsonFx("superlative", JSON_SUP));
+  expect("[3] PLANT: a superlative only in src/content/*.json fires the en arm under that file", cands(out, JSON_FILE, "en") === "newest", candLine(out));
+  expect("and the candidate line is REVIEW, never FAIL", /^\s*REVIEW\s/.test(candLine(out)), candLine(out));
+  // PLANT: a value at depth, inside an array inside an object, is read; the hype list runs on it too
+  const deep = run(jsonFx("deep", json({ a: [{ b: { c: "An amazing evening." } }] })));
+  expect("[3] PLANT: a string value at depth fires the hype list", cands(deep, JSON_FILE, "hype") === "amazing", candLine(deep));
+}
+{
+  // PLANT: an em-dash only in a JSON string value FAILS and names the file, literal and as a JSON
+  // escape, which is the same string once parsed and which no read of the raw text would see
+  const lit = run(jsonFx("emdash", JSON_EM));
+  expect("[3] PLANT: a literal em-dash only in src/content/*.json FAILS, naming the file and the form",
+    fails(lit, "em-dash(es) in rendered copy") && lineOf(lit, "em-dash(es)").includes("src/content/voice.json; forms: U+2014"), lineOf(lit, "in rendered copy"));
+  const esc = run(jsonFx("emdash-escape", '{ "title": "Plain copy \\u2014 with a dash." }\n'));
+  expect("[3] PLANT: an em-dash written as the JSON escape \\u2014 FAILS as U+2014, the value being read and not the text",
+    fails(esc, "em-dash(es) in rendered copy") && lineOf(esc, "em-dash(es)").includes("src/content/voice.json; forms: U+2014"), lineOf(esc, "in rendered copy"));
+}
+{
+  // the JSON half needs no parser: with no typescript the plant still fires and the line still counts
+  const out = run(jsonFx("fallback", JSON_SUP, { ts: false }));
+  expect("[3] PLANT: under the parse-absent fallback a JSON-only superlative still fires", cands(out, JSON_FILE, "en") === "newest", candLine(out));
+  expect("and the corpus line counts its string value", lineOf(out, "voice arm=").includes("src/content/*.json, 1 file(s), 1 string(s)"), lineOf(out, "voice arm="));
+}
+{
+  // a JSON file that does not parse is read as its comment-stripped text, and a note names it
+  const out = run(jsonFx("unparsed", '{ "title": "The newest way", }\n'));
+  expect("[3] a JSON file that does not parse is named in a note", notes(out, "voice corpus: src/content/voice.json did not parse as JSON"), lineOf(out, "did not parse"));
+  expect("and its text is still read, so the plant fires", cands(out, JSON_FILE, "en") === "newest", candLine(out));
+}
+{
+  // SCOPE GUARD: src/content/*.json is the top level, as the row names it; a JSON file in a
+  // subdirectory is not in the corpus (the PR body carries the question of reading below it)
+  const out = run(jsonFx("subdir", JSON_EM, { file: "src/content/sub/voice.json" }));
+  expect("[3] SCOPE GUARD: a JSON file below src/content's top level is not read", passes(out, "no em-dashes in rendered copy") &&
+    lineOf(out, "voice arm=").includes("src/content/*.json, 0 file(s), 0 string(s)"), lineOf(out, "voice arm="));
+}
+{
+  // NEGATIVE CONTROL: verify.mjs with the JSON list emptied, which is main before this run, reads
+  // both plants as PASS, so it is the JSON read that turns them red
+  const m = mutant("no-json", "const copyJson = existsSync(P.content)", "const copyJson = [];\nconst copyJsonUnread = existsSync(P.content)");
+  expect("the no-JSON mutant finds its anchor once", m.anchored);
+  const sup = run(jsonFx("superlative-mutant", JSON_SUP), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the JSON list emptied, the JSON-only superlative reads PASS", passes(sup, "no superlative candidates"), candLine(sup));
+  const em = run(jsonFx("emdash-mutant", JSON_EM), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the JSON list emptied, the JSON-only em-dash reads PASS", passes(em, "no em-dashes in rendered copy"), lineOf(em, "in rendered copy"));
+}
 if (voiceNotRun.length) console.log(`  NOT RUN (typescript is not installed here; npm ci installs it): ${voiceNotRun.join(" | ")}`);
 
 rmSync(ROOT, { recursive: true, force: true });
@@ -1452,6 +1540,7 @@ console.log("and the fold of #27's review (C18 string-literal types F1, the type
 console.log("the recovered syntax errors F6, the absent lang F7, each arm's own greeting F8).");
 console.log("And brief siteseed-emdash (C19 [3]'s em-dash half: leading-zero and semicolon-less entities, and U+2015,");
 console.log("U+2E3A, U+2E3B, U+FE31 and U+FE58 literal and as entities).");
+console.log("And brief siteseed-voice-json (C20 [3] reads the string values of src/content/*.json in both halves, Factory backlog row 1897).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");
