@@ -1341,12 +1341,29 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
 // these. A FAIL names the forms it found, since a lookalike is hard to see in an editor.
 out.push("\n[3] VOICE -- zero prose em-dashes (literal + entity); superlatives flagged");
 const copyFiles = [...walk(P.content, [".tsx", ".ts"]), ...walk(P.routes, [".tsx", ".ts"]), ...walk(P.spineDir, [".tsx", ".ts"])];
+// AND THE STRING VALUES OF src/content/*.json, read as copy by both halves (Factory backlog row
+// 1897). aismith-site #95 moved 14 literals out of site.config.tsx into src/content/legal-controller.json
+// and every one of them left this section, whose corpus was *.tsx and *.ts alone. A JSON file holds
+// no markup and no code, so its copy is its string values at any depth; its keys are lookups and
+// are not read. The top level of src/content only, as the row names it. A file that does not parse
+// is read as its comment-stripped text, as a source file is without a parser, and a note names it.
+const copyJson = existsSync(P.content)
+  ? readdirSync(P.content).filter((e) => e.endsWith(".json")).map((e) => join(P.content, e)).filter((p) => statSync(p).isFile()) : [];
+const jsonCopy = new Map(), jsonUnparsed = [];
+let jsonStrings = 0;
+for (const f of copyJson) {
+  const src = read(f) || "";
+  const strings = [];
+  const visit = (v) => { if (typeof v === "string") strings.push(v); else if (v && typeof v === "object") Object.values(v).forEach(visit); };
+  try { visit(JSON.parse(src)); jsonStrings += strings.length; jsonCopy.set(f, strings); }
+  catch { jsonUnparsed.push(relative(ROOT, f)); jsonCopy.set(f, [stripComments(src)]); }
+}
 let emDash = 0; const emFiles = []; const emForms = new Set();
 // by escape, not by character, so this file stays ASCII
 const EM_LITERAL = /[\u2014\u2015\u2e3a\u2e3b\ufe31\ufe58]/g;
 const EM_ENTITY = /&(?:mdash|horbar);?|&#0*(?:8212|8213|11834|11835|65073|65112)(?![0-9]);?|&#x0*(?:2014|2015|2e3a|2e3b|fe31|fe58)(?![0-9a-f]);?/gi;
-for (const f of copyFiles) {
-  const body = stripComments(read(f) || "");
+for (const f of [...copyFiles, ...copyJson]) {
+  const body = jsonCopy.has(f) ? jsonCopy.get(f).join("\n") : stripComments(read(f) || "");
   const lit = body.match(EM_LITERAL) || [], ent = body.match(EM_ENTITY) || [];
   for (const c of lit) emForms.add("U+" + c.codePointAt(0).toString(16).toUpperCase());
   for (const e of ent) emForms.add(e);
@@ -1373,7 +1390,7 @@ else ok("no em-dashes in rendered copy (U+2014 and its five lookalikes, literal 
 //     read as copy: no parse can tell it from a label. `typescript` is borrowed from the
 //     node_modules at the SITE's root, so this file keeps no dependency of its own; where the site
 //     has none, the arm reads the comment-stripped body as before and says so in a note. It never
-//     fails.
+//     fails. The string values of src/content/*.json are copy as they stand, parser or none.
 //   THE LISTS, each CLOSED. English: `-est` morphology plus four irregulars, minus a stop-list of
 //     the eight non-superlatives measured in the two English corpora. Dutch: the superlative forms
 //     measured in the two Dutch corpora, `aller...ste`, and the analytic `meest <adjective>`, while
@@ -1444,10 +1461,11 @@ const voiceRun = [...voiceArms, "hype"];
 const voiceCount = Object.fromEntries(voiceRun.map((a) => [a, 0]));
 const voiceHits = [], voiceParseErrors = [];
 let voiceStrings = 0;
-for (const f of copyFiles) {
+for (const f of [...copyFiles, ...copyJson]) {
   const src = read(f) || "";
   let texts;
-  if (voiceTs) {
+  if (jsonCopy.has(f)) texts = jsonCopy.get(f);
+  else if (voiceTs) {
     const { strings, errors } = voiceCopy(voiceTs, f, src);
     texts = strings; voiceStrings += strings.length;
     if (errors) voiceParseErrors.push(`${relative(ROOT, f)} (${errors})`);
@@ -1467,8 +1485,11 @@ note(`voice arm=${voiceArms[0] ?? "none"}${voiceLang ? ` from <html lang="${voic
   : `, src/routes/__root.tsx hard-sets no <html lang="..">`}, plus the hype list; ` +
   `extractor: ${voiceTs ? `TypeScript parse (typescript ${voiceTs.version}, ${voiceTsAt}), ${voiceStrings} string(s) extracted` : "comment-stripped source (FALLBACK)"}; ` +
   `corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, ${copyFiles.length} file(s): ` +
-  `${voiceRoots.map(([name, dir]) => `${name} ${copyFiles.filter((f) => f.startsWith(dir + sep)).length}`).join(", ")}; ` +
+  `${voiceRoots.map(([name, dir]) => `${name} ${copyFiles.filter((f) => f.startsWith(dir + sep)).length}`).join(", ")}, ` +
+  `and the string values of src/content/*.json, ${copyJson.length} file(s), ${jsonStrings} string(s); ` +
   `matches: ${voiceRun.map((a) => `${a} ${voiceCount[a]}`).join(", ")}`);
+if (jsonUnparsed.length) note(`voice corpus: ${jsonUnparsed.join(", ")} did not parse as JSON, so both halves read its ` +
+  `comment-stripped text, keys included`);
 if (!voiceTs) note(`voice extractor FALLBACK: ${voiceTsWhy}, so the arms read each file's comment-stripped source, code ` +
   `included, and identifiers can surface as candidates (npm ci installs it where the site lists it)`);
 if (voiceParseErrors.length) note(`voice extractor: the parse recovered from syntax errors in ${voiceParseErrors.join(", ")}, ` +

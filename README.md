@@ -290,9 +290,44 @@ Its planted negatives and green controls are in `verify.selftest.mjs` (C19).
   is hard to see in an editor, and the PASS line names what it read. Comments stay exempt (S9.4), and
   the corpus is unchanged.
 
+### What `[3]`'s corpus gained on 2026-10-14 (brief siteseed-voice-json)
+
+Its planted negatives, green controls, scope guard and negative control are in `verify.selftest.mjs` (C20).
+
+- **The string values of `src/content/*.json` are copy (Factory backlog row 1897).** `[3]` read
+  `*.tsx` and `*.ts` alone under its three roots, so copy a site moved into JSON left both halves:
+  `aismith-site` #95 moved 14 literals out of `site.config.tsx` into
+  `src/content/legal-controller.json`, and the check stopped reading them. Both halves now read every
+  string value of each JSON file at the top level of `src/content`, at any depth, as the parse gives
+  it, so the escape `\u2014` is an em-dash. Keys are lookups and are not read, and a number or a
+  boolean is not a string.
+- **No parser needed.** The JSON half reads the same with or without `typescript`. A file that does
+  not parse is read as its comment-stripped text, keys included, and a note names it.
+- **The corpus line names it.** After the three roots' per-root counts the note reads `and the string
+  values of src/content/*.json, <n> file(s), <m> string(s)`, at zero where a site has none.
+- **The top level only**, as the row names it: a JSON file in a subdirectory of `src/content` stays
+  outside the corpus.
+
 ## Release history
 
 Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+
+### THE NEXT FREE MINOR AT MERGE (2026-10-14, brief siteseed-voice-json: `[3]` reads the string values of `src/content/*.json`)
+
+No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
+move. Measured on this run: against `aismith-site` `main` (`57d4c042`) the corpus line adds 3 JSON
+files and 250 string values beside the same 49 source files and 1879 extracted strings, the em-dash
+half still passes, and one new REVIEW candidate surfaces, `suggest` in
+`src/content/hub-film-cues.json`, an `-est` word the closed stop-list does not hold, so `aismith-site`
+does not go red when it takes this release. With each of the 14 values #95 moved suffixed with
+`newest` in a scratch copy, the en count reads 20 here (6 plus the 14) and 5 under `main`'s checker.
+`cafe-josee-site` (`c725d6b5`) holds no JSON in `src/content` and reads as before; `zuidgeluid-site`
+and `sz-site` were not read.
+
+- **Factory backlog row 1897, `[3]`'s corpus and JSON copy.** `[3]` reads the string values of
+  `src/content/*.json` as copy in both halves, beside the `*.tsx` and `*.ts` corpus, and its corpus
+  line names them, with six planted negatives, two green controls, a scope guard and a negative
+  control (C20).
 
 ### THE NEXT FREE MINOR AT MERGE (2026-10-13, brief siteseed-emdash: the `[3]` em-dash half reads every form)
 
