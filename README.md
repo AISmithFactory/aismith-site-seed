@@ -306,13 +306,64 @@ Its planted negatives, green controls, scope guard and negative control are in `
 - **The corpus line names it.** After the three roots' per-root counts the note reads `and the string
   values of src/content/*.json, <n> file(s), <m> string(s)`, at zero where a site has none.
 - **The top level only**, as the row names it: a JSON file in a subdirectory of `src/content` stays
-  outside the corpus.
+  outside the corpus. (Read at any depth since 2026-11-17, below.)
+
+### What `[3]` gained on 2026-11-17 (brief site-seed-voice-and-readme)
+
+Its planted negatives, green controls, scope guard and negative controls are in `verify.selftest.mjs` (C21).
+
+- **Every JSON file under `src/content`, at any depth (Factory backlog N107).** The JSON half took the
+  top level of `src/content` alone, so `aismith-site`'s five JSON files under `src/content/hub/`, 460
+  strings of rendered copy, were read by neither half. It now walks `src/content` as the `*.tsx` and
+  `*.ts` corpus is walked, and the corpus line reads `and the string values of
+  src/content/**/*.json, <n> file(s), <m> string(s)`.
+- **The Dutch hype words' inflected forms (N076).** Each of the ten closed on a word boundary, so *een
+  unieke sfeer* went unreported. Each now takes its `-e` form (`naadloos` as `naadloze`), and
+  `wereldklasse`, a noun, takes none. Measured over the copy of `zuidgeluid-site` (`8d7883be`) and
+  `sz-site` (`92afb27f`), every form of the ten: `prachtig` 1 and `hartverwarmend` 1 on the first,
+  both already matched; `uniek` 1, `unieke` 2 and `onvergetelijke` 1 on the second; no other form and
+  no false positive.
+- **Four English copy words join the stop-list (N077).** `guest`, `forest` and `harvest` (site seed
+  #27's F4) and `suggest` (#31's flag 2), English words ending `-est` that are no superlative, are
+  silent beside the eight. The arm's denominator is stated beside it in `verify.mjs`: over the seed
+  and `aismith-site` it counted 18 matches with the eight-word list, 9 of them superlative forms and
+  none a marketing superlative, and counts 16 with the twelve.
+- **The Dutch list on an `en` site (N078).** An `en` site runs the Dutch superlative list beside its
+  own arm, so a `beste` in its copy (the bilingual spine, a `*.nl.json`) is a candidate again, under
+  `[nl]`. The list is closed and reads nothing in English copy: 0 matches on the seed and on
+  `aismith-site`. The English morphology still does not run on an `nl` site, and the arm note names
+  the list it added: `plus the nl list and the hype list`.
 
 ## Release history
 
-Newest first. The controller stamps the version at merge; the seed carries no `.seed-version`.
+Newest first, each entry headed by the pull request that merged it. **A site pins the seed by sha**:
+the full 40-character sha of a merge commit on `main`, in its `SEED_REF` and its charter's
+` ```seed ` block. The seed has no version number, no tag and no `.seed-version`, and nothing is
+stamped at merge (ruled 2026-11-17, Factory backlog N106, option (a)). The six entries merged before
+that ruling also name their merge commit; `git log --oneline --grep '(#<n>)' main` gives any entry's.
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-14, brief siteseed-voice-json: `[3]` reads the string values of `src/content/*.json`)
+### #32 (2026-11-17, brief site-seed-voice-and-readme: the `[3]` voice lists, the JSON read at any depth, `SCAFFOLD.md` and `functions/DEPLOY.md` whole)
+
+No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
+move. Measured on this run against each site's `main`, its `src/` read alone: `aismith-site`
+(`6a10b904`) reads 8 JSON files and 814 string values where it read 3 and 354, the em-dash half still
+passes, and its `en` matches go from 7 to 11: `Guest` and `suggest` leave, and `ingest`
+(`src/content/hub/reveal-block-texts.en.json`), `leest` 3 and `getest` 2 (the Dutch of the two
+`*.nl.json` under `src/content/hub/`, read by the English morphology) arrive; its `nl` count is 0.
+`sz-site` (`92afb27f`) reads `hype` 5 where it read 2 (`unieke` and `onvergetelijke`, in
+`feed.snapshot.json`). `zuidgeluid-site` (`8d7883be`), `cafe-josee-site` (`245eff4c`) and this seed
+read as before, the seed's note now counting `nl 0`. Every new line is REVIEW, so no site goes red on
+`[3]` when it takes this release.
+
+- **Factory backlog N107, N076, N077 and N078**, `[3]` as above (C21).
+- **Factory backlog N071.** `SCAFFOLD.md` and `functions/DEPLOY.md` were born truncated at their
+  blocks' first nested fence. Each is now its block in the Factory's `as-site-seed-instance.md`
+  (v0.11.6) whole, 45 and 41 lines, and `SCAFFOLD.md` no longer names Lovable as the build agent; it
+  names Lovable Cloud only as the backend never to provision, as the block does.
+- **Factory backlog N106.** This history drops the version it promised and never stamped, and says a
+  site pins the seed by sha.
+
+### #31, merged as `c2286ccb` (2026-10-14, brief siteseed-voice-json: `[3]` reads the string values of `src/content/*.json`)
 
 No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
 move. Measured on this run: against `aismith-site` `main` (`57d4c042`) the corpus line adds 3 JSON
@@ -329,7 +380,7 @@ and `sz-site` were not read.
   line names them, with six planted negatives, two green controls, a scope guard and a negative
   control (C20).
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-13, brief siteseed-emdash: the `[3]` em-dash half reads every form)
+### #30, merged as `b277ffed` (2026-10-13, brief siteseed-emdash: the `[3]` em-dash half reads every form)
 
 No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
 move. Measured on this run, the new half finds nothing in `aismith-site` (`2e3fd8ae`, 49 corpus
@@ -341,7 +392,7 @@ files) or `cafe-josee-site` (`c725d6b5`, 28), so neither goes red when it takes 
   and U+FE58, literal and in every entity form, each with a planted negative and with three green
   controls beside them (C19). A FAIL names the forms it found.
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief S-VC-U1: the `[3]` voice check by declared register)
+### #27, merged as `d196a5de` (2026-10-12, brief S-VC-U1: the `[3]` voice check by declared register)
 
 No spine file, no embed and no site-contract file moves; each site takes the checker at its next pin
 move.
@@ -358,7 +409,7 @@ move.
   parser recovered from rather than a throw it never makes (F6); a missing `lang` reads as missing,
   not as `lang=""` (F7); and the REVIEW line's example greeting is the running arm's own (F8).
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-12, brief W-tier: the tier icon reads its slot's own ink)
+### #26, merged as `cd2f23d3` (2026-10-12, brief W-tier: the tier icon reads its slot's own ink)
 
 One spine file moves, `src/styles/spine.css`. The Factory re-embeds this release at the next
 site-contract cut after 1.8.31, whose number the controller sets at the stamp, and each site takes
@@ -378,7 +429,7 @@ it at its re-pin.
   skipped with no line, and the note names an ink of the slot's own family the block still reads,
   painted on a ground no pair asserts (F2); this entry names the Factory re-embed (F1).
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
+### #25, merged as `3bd5c28c` (2026-10-11, brief W14: the checker, skins and hue pairs, TanStack routes, the composed-hue resolver, the prerender filter)
 
 No spine file moves. The Factory re-embeds this release at site-contract 1.8.31 (plan job K1) with
 W13's, and each site takes it at its resync.
@@ -396,7 +447,7 @@ W13's, and each site takes it at its resync.
   pass's slot note names the map (F4); the R063 line states its markup scope (F5); and the seed's
   `/website` page links `/og-card.png`, the one instance change, so `[11]` has a live denominator (F6).
 
-### THE NEXT FREE MINOR AT MERGE (2026-10-11, brief W13: the spine defects and the hue slots)
+### #24, merged as `9118d969` (2026-10-11, brief W13: the spine defects and the hue slots)
 
 The Factory re-embeds this release at site-contract 1.8.31 (plan job K1), and each site takes it
 at its resync, in that order.
