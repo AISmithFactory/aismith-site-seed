@@ -101,6 +101,19 @@
 // verify.mjs of main before that run, 13 of these 17 assertions FAIL; the four that hold are the
 // clean file's two PASS verdicts and the two NEGATIVE CONTROL reads, main having no JSON read to remove.
 //
+// EXTENDED 2026-11-17 (brief site-seed-voice-and-readme, Factory backlog N076, N077, N078 and N107) by
+// the four changes THAT run made to [3]: C21. Every JSON file under src/content is read, at any depth
+// (N107; C20's SCOPE GUARD, which held a subdirectory out, is retired, and its fixture is now C21's
+// PLANT); each Dutch hype word's -e form fires the hype list (N076); guest, forest, harvest and suggest
+// join the English stop-list (N077); and the nl list runs beside the en arm on an en site (N078). Each
+// has PLANTs, a GREEN CONTROL or a SCOPE GUARD, and a NEGATIVE CONTROL that is verify.mjs with the
+// change undone. Run against the verify.mjs of main before that run, 25 of C21's 36 assertions FAIL;
+// the 11 that hold are N107's two NEGATIVE CONTROLs, N076's SCOPE GUARD and NEGATIVE CONTROL, N077's
+// four NEGATIVE CONTROLs, and N078's two GREEN CONTROLs and NEGATIVE CONTROL. Sixteen assertions of
+// C18 and C20 are restated for the change (the en arm's note, the stop-list mutant's anchor and its
+// eight PLANTs, the corpus line's src/content/**/*.json, the no-JSON mutant's anchor and its two
+// NEGATIVE CONTROLs), and all 16 FAIL against that verify.mjs.
+//
 // PORTED FROM the closed Factory PR #1017 (branch chat/2026-09-18-site-verify) and ADAPTED, not
 // copied: that harness was written against the Factory working copy of verify.mjs, which is a
 // generation behind this one. Where the seed's copy makes a different finding in the same branch,
@@ -313,7 +326,7 @@ const passes = (out, sub) => /^\s*PASS\s/.test(lineOf(out, sub));
 const verdicts = (out, kind) => out.split("\n").filter((l) => new RegExp("^\\s*" + kind + "\\s").test(l));
 const failsAny = (out, sub) => verdicts(out, "FAIL").some((l) => l.includes(sub));
 
-console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27) and 2026-10-13 (the [3] em-dash half, every form) and 2026-10-14 (the [3] corpus, the string values of src/content/*.json)\n");
+console.log("verify.selftest -- negative cases for the checks added 2026-09-18 (rows 046 ground half, 098, 107) and 2026-10-11 (R112, R120, R121, R122, R125, R221, the review fold of #24, and R110, R111, R063, R109) and 2026-10-12 (W-tier, and R055, the [3] voice arm, and the review fold of #27) and 2026-10-13 (the [3] em-dash half, every form) and 2026-10-14 (the [3] corpus, the string values of src/content/*.json) and 2026-11-17 (the [3] voice lists, and the JSON read at any depth)\n");
 
 // ---- C1. CONTROL: a fully instantiated site fires NONE of the new checks ----------------------
 {
@@ -1194,6 +1207,8 @@ const cands = (out, file, arm) => {
   return item ? item.slice(`${file} [${arm}]: `.length) : null;
 };
 const VOICE_FILE = "src/content/voice.tsx";
+// the stop-list's declaration as verify.mjs writes it, the anchor of every stop-list mutant
+const STOP_EN_DECL = 'const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest",\n  "guest", "forest", "harvest", "suggest"];';
 const VERIFY_SRC = readFileSync(VERIFY, "utf8");
 const mutant = (name, from, to) => {
   const path = join(ROOT, `verify.mutant-${name}.mjs`);
@@ -1209,8 +1224,8 @@ if (!TS_DIR && process.env.CI === "true")
   // GREEN CONTROL: the base site's copy carries no candidate, and the arm says what it read
   const out = run(build("voice-control", { ts: true }));
   expect("[3] GREEN CONTROL: the base site reads no superlative candidates", passes(out, "no superlative candidates"), candLine(out));
-  expect("[3] names the arm, its register source and the hype list",
-    notes(out, 'voice arm=en from <html lang="en"> in src/routes/__root.tsx (primary subtag), plus the hype list'), lineOf(out, "voice arm="));
+  expect("[3] names the arm, its register source, the nl list it also runs and the hype list",
+    notes(out, 'voice arm=en from <html lang="en"> in src/routes/__root.tsx (primary subtag), plus the nl list and the hype list'), lineOf(out, "voice arm="));
   expect("[3] states the corpus by its three roots with a per-root count",
     lineOf(out, "voice arm=").includes("corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, 4 file(s): src/content 1, src/routes 2, src/components/spine 1"),
     lineOf(out, "voice arm="));
@@ -1235,7 +1250,7 @@ if (!TS_DIR && process.env.CI === "true")
   expect("[3] GREEN CONTROL: the eight stop-listed words and the three context exclusions are silent", passes(out, "no superlative candidates"), candLine(out));
   // PLANT: the same copy under a mutant whose stop-list is emptied fires all eight, so it is the
   // list that silences them and not a morphology that never matched them
-  const m = mutant("stoplist", 'const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"];', "const VOICE_STOP_EN = [];");
+  const m = mutant("stoplist", STOP_EN_DECL, "const VOICE_STOP_EN = [];");
   expect("the stop-list mutant finds its anchor once", m.anchored);
   const got = (cands(run(voiceFx("en-stoplist-mutant", copy), { verify: m.path }), VOICE_FILE, "en") || "").split(", ").map((w) => w.toLowerCase());
   for (const w of ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"])
@@ -1460,8 +1475,8 @@ const JSON_EM = json({ title: `Plain copy ${EMJ} with a dash.` });
 {
   // GREEN CONTROL: no JSON file, and the corpus line still names the JSON half, at zero
   const out = run(build("json-none", { ts: true }));
-  expect("[3] the corpus line names the string values of src/content/*.json, at zero where there are none",
-    lineOf(out, "voice arm=").includes("src/components/spine 1, and the string values of src/content/*.json, 0 file(s), 0 string(s); matches:"), lineOf(out, "voice arm="));
+  expect("[3] the corpus line names the string values of src/content/**/*.json, at zero where there are none",
+    lineOf(out, "voice arm=").includes("src/components/spine 1, and the string values of src/content/**/*.json, 0 file(s), 0 string(s); matches:"), lineOf(out, "voice arm="));
 }
 {
   // GREEN CONTROL: a clean JSON file is read and passes both halves; its keys are lookups, not copy,
@@ -1470,7 +1485,7 @@ const JSON_EM = json({ title: `Plain copy ${EMJ} with a dash.` });
   expect("[3] GREEN CONTROL: a clean JSON file reads no superlative candidates, its keys silent", passes(out, "no superlative candidates"), candLine(out));
   expect("[3] GREEN CONTROL: a clean JSON file reads no em-dash, its keys silent", passes(out, "no em-dashes in rendered copy"), lineOf(out, "in rendered copy"));
   expect("[3] the corpus line counts the JSON file and its four string values beside the *.tsx and *.ts roots",
-    lineOf(out, "voice arm=").includes("4 file(s): src/content 1, src/routes 2, src/components/spine 1, and the string values of src/content/*.json, 1 file(s), 4 string(s)"),
+    lineOf(out, "voice arm=").includes("4 file(s): src/content 1, src/routes 2, src/components/spine 1, and the string values of src/content/**/*.json, 1 file(s), 4 string(s)"),
     lineOf(out, "voice arm="));
 }
 {
@@ -1496,7 +1511,7 @@ const JSON_EM = json({ title: `Plain copy ${EMJ} with a dash.` });
   // the JSON half needs no parser: with no typescript the plant still fires and the line still counts
   const out = run(jsonFx("fallback", JSON_SUP, { ts: false }));
   expect("[3] PLANT: under the parse-absent fallback a JSON-only superlative still fires", cands(out, JSON_FILE, "en") === "newest", candLine(out));
-  expect("and the corpus line counts its string value", lineOf(out, "voice arm=").includes("src/content/*.json, 1 file(s), 1 string(s)"), lineOf(out, "voice arm="));
+  expect("and the corpus line counts its string value", lineOf(out, "voice arm=").includes("src/content/**/*.json, 1 file(s), 1 string(s)"), lineOf(out, "voice arm="));
 }
 {
   // a JSON file that does not parse is read as its comment-stripped text, and a note names it
@@ -1505,21 +1520,105 @@ const JSON_EM = json({ title: `Plain copy ${EMJ} with a dash.` });
   expect("and its text is still read, so the plant fires", cands(out, JSON_FILE, "en") === "newest", candLine(out));
 }
 {
-  // SCOPE GUARD: src/content/*.json is the top level, as the row names it; a JSON file in a
-  // subdirectory is not in the corpus (the PR body carries the question of reading below it)
-  const out = run(jsonFx("subdir", JSON_EM, { file: "src/content/sub/voice.json" }));
-  expect("[3] SCOPE GUARD: a JSON file below src/content's top level is not read", passes(out, "no em-dashes in rendered copy") &&
-    lineOf(out, "voice arm=").includes("src/content/*.json, 0 file(s), 0 string(s)"), lineOf(out, "voice arm="));
-}
-{
   // NEGATIVE CONTROL: verify.mjs with the JSON list emptied, which is main before this run, reads
   // both plants as PASS, so it is the JSON read that turns them red
-  const m = mutant("no-json", "const copyJson = existsSync(P.content)", "const copyJson = [];\nconst copyJsonUnread = existsSync(P.content)");
+  const m = mutant("no-json", 'const copyJson = walk(P.content, [".json"]);', "const copyJson = [];");
   expect("the no-JSON mutant finds its anchor once", m.anchored);
   const sup = run(jsonFx("superlative-mutant", JSON_SUP), { verify: m.path });
   expect("[3] NEGATIVE CONTROL: with the JSON list emptied, the JSON-only superlative reads PASS", passes(sup, "no superlative candidates"), candLine(sup));
   const em = run(jsonFx("emdash-mutant", JSON_EM), { verify: m.path });
   expect("[3] NEGATIVE CONTROL: with the JSON list emptied, the JSON-only em-dash reads PASS", passes(em, "no em-dashes in rendered copy"), lineOf(em, "in rendered copy"));
+}
+// ---- C21. brief site-seed-voice-and-readme (Factory backlog N076, N077, N078, N107) -------------
+// Four changes to [3], each with a PLANT that goes red (a candidate surfacing in the REVIEW line, or
+// an em-dash FAILING), a GREEN CONTROL that reads PASS, and a NEGATIVE CONTROL that is verify.mjs
+// with the change undone, under which the PLANT reads as main before this run read it.
+{
+  // N107: every JSON file under src/content is read, at any depth, as the *.tsx and *.ts corpus is
+  const SUB = "src/content/sub/voice.json", DEEP = "src/content/a/b/voice.json";
+  const em = run(jsonFx("subdir-emdash", JSON_EM, { file: SUB }));
+  expect("[3] PLANT: an em-dash only in a JSON file one directory below src/content FAILS, naming that file",
+    fails(em, "em-dash(es) in rendered copy") && lineOf(em, "em-dash(es)").includes("src/content/sub/voice.json; forms: U+2014"), lineOf(em, "in rendered copy"));
+  const sup = run(jsonFx("subdir-superlative", JSON_SUP, { file: DEEP }));
+  expect("[3] PLANT: a superlative only in a JSON file two directories below src/content fires the en arm under that file",
+    cands(sup, DEEP, "en") === "newest", candLine(sup));
+  expect("and the corpus line counts the file and its string value",
+    lineOf(sup, "voice arm=").includes("and the string values of src/content/**/*.json, 1 file(s), 1 string(s)"), lineOf(sup, "voice arm="));
+  // GREEN CONTROL: a clean JSON file below the top level is read, counted, and passes both halves
+  const clean = run(jsonFx("subdir-clean", json({ title: "A plain line.", list: ["Plain."] }), { file: SUB }));
+  expect("[3] GREEN CONTROL: a clean JSON file below src/content's top level passes both halves and is counted",
+    passes(clean, "no superlative candidates") && passes(clean, "no em-dashes in rendered copy") &&
+    lineOf(clean, "voice arm=").includes("src/content/**/*.json, 1 file(s), 2 string(s)"), lineOf(clean, "voice arm="));
+  // NEGATIVE CONTROL: the top-level read of main before this run, under which both plants read PASS
+  const m = mutant("json-top-level", 'const copyJson = walk(P.content, [".json"]);',
+    'const copyJson = existsSync(P.content)\n  ? readdirSync(P.content).filter((e) => e.endsWith(".json")).map((e) => join(P.content, e)).filter((p) => statSync(p).isFile()) : [];');
+  expect("the top-level-JSON mutant finds its anchor once", m.anchored);
+  const mem = run(jsonFx("subdir-emdash-mutant", JSON_EM, { file: SUB }), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the JSON read at the top level only, the subdirectory em-dash reads PASS", passes(mem, "no em-dashes in rendered copy"), lineOf(mem, "in rendered copy"));
+  const msup = run(jsonFx("subdir-superlative-mutant", JSON_SUP, { file: DEEP }), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the JSON read at the top level only, the subdirectory superlative reads PASS", passes(msup, "no superlative candidates"), candLine(msup));
+}
+const INFLECTED = ["unieke", "magische", "naadloze", "onvergetelijke", "toonaangevende", "onge\u00ebvenaarde", "revolutionaire", "prachtige", "hartverwarmende"];
+const INFLECTED_PAGE = page(`Een ${INFLECTED.slice(0, 8).join(", ")} en ${INFLECTED[8]} avond.`);
+{
+  // N076: each Dutch hype word's -e form fires the hype list (naadloos as naadloze), under nl and under en
+  const nl = run(voiceFx("hype-inflected-nl", INFLECTED_PAGE, { lang: "nl" }));
+  const got = (cands(nl, VOICE_FILE, "hype") || "").split(", ");
+  for (const w of INFLECTED) expect(`[3] PLANT: the inflected hype form "${w}" fires the hype list under nl`, got.includes(w), got.join(", "));
+  expect("and nothing else in the sentence does", got.length === INFLECTED.length, got.join(", "));
+  const en = run(voiceFx("hype-inflected-en", page("Een unieke sfeer.")));
+  expect("[3] PLANT: an inflected hype form fires under the en arm too, the hype list running whatever the arm", cands(en, VOICE_FILE, "hype") === "unieke", candLine(en));
+  // SCOPE GUARD: each word still closes on a word boundary, so a longer word built on one stays out
+  const guard = run(voiceFx("hype-inflected-guard", page("De onvergetelijkheid van een uniekheid."), { lang: "nl" }));
+  expect("[3] SCOPE GUARD: onvergetelijkheid and uniekheid are silent, the -e form being the only one added", passes(guard, "no superlative candidates"), candLine(guard));
+  // NEGATIVE CONTROL: the Dutch half of the hype list as main before this run held it reads none of the nine
+  const m = mutant("hype-uninflected",
+    "unieke?|magische?|naadlo(?:os|ze)|onvergetelijke?|wereldklasse|toonaangevende?|onge[e\u00eb]venaarde?|revolutionaire?|prachtige?|hartverwarmende?",
+    "uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[e\u00eb]venaard|revolutionair|prachtig|hartverwarmend");
+  expect("the uninflected-hype mutant finds its anchor once", m.anchored);
+  const mout = run(voiceFx("hype-inflected-mutant", INFLECTED_PAGE, { lang: "nl" }), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the -e forms removed, the nine inflected forms read PASS", passes(mout, "no superlative candidates"), candLine(mout));
+}
+const COPY_EST = page("Every Guest walks the forest at harvest, and we suggest a table.");
+{
+  // N077: the four -est copy words measured after the eight are silent under the en arm
+  const out = run(voiceFx("en-copy-est", COPY_EST));
+  expect("[3] GREEN CONTROL: guest (as Guest), forest, harvest and suggest are silent under the en arm", passes(out, "no superlative candidates"), candLine(out));
+  // PLANT: an unlisted -est word beside them still fires, so the list silences four words and no more
+  const plant = run(voiceFx("en-copy-est-plant", page("We suggest our guests the newest table.")));
+  expect("[3] PLANT: beside suggest, the unlisted newest still fires the en arm", cands(plant, VOICE_FILE, "en") === "newest", candLine(plant));
+  // NEGATIVE CONTROL: with the stop-list emptied, each of the four fires
+  const m = mutant("stoplist-copy", STOP_EN_DECL, "const VOICE_STOP_EN = [];");
+  expect("the copy-word stop-list mutant finds its anchor once", m.anchored);
+  const got = (cands(run(voiceFx("en-copy-est-mutant", COPY_EST), { verify: m.path }), VOICE_FILE, "en") || "").split(", ").map((w) => w.toLowerCase());
+  for (const w of ["guest", "forest", "harvest", "suggest"])
+    expect(`[3] NEGATIVE CONTROL: with the stop-list emptied, "${w}" fires`, got.includes(w), got.join(", "));
+}
+const NL_ON_EN = page("Beste klant, de mooiste avond van het jaar.");
+{
+  // N078: a Dutch superlative in an en site's copy is reported, the nl list running beside the en arm
+  const out = run(voiceFx("nl-on-en", NL_ON_EN));
+  expect("[3] PLANT: a Dutch superlative in an en site's copy fires the nl list", cands(out, VOICE_FILE, "nl") === "Beste, mooiste", candLine(out));
+  expect("and the candidate line is REVIEW, never FAIL", /^\s*REVIEW\s/.test(candLine(out)), candLine(out));
+  expect("and the note counts each list it ran", lineOf(out, "voice arm=").includes("matches: en 0, nl 2, hype 0"), lineOf(out, "voice arm="));
+  // PLANT: in a Dutch JSON file below src/content on an en site, the shape aismith-site carries
+  const js = run(jsonFx("nl-on-en", json({ body: "De allerliefste ploeg." }), { file: "src/content/hub/texts.nl.json" }));
+  expect("[3] PLANT: a Dutch superlative in an en site's *.nl.json below src/content fires the nl list",
+    cands(js, "src/content/hub/texts.nl.json", "nl") === "allerliefste", candLine(js));
+  // GREEN CONTROL: English copy near the Dutch forms (-ste and -est endings) reads no nl candidate
+  const near = run(voiceFx("nl-on-en-near", page("Paste the taste, waste no haste: the oldest and the youngest.")));
+  expect("[3] GREEN CONTROL: English -ste and -est words read no nl candidate on an en site",
+    cands(near, VOICE_FILE, "nl") === null && cands(near, VOICE_FILE, "en") === "oldest, youngest", candLine(near));
+  // GREEN CONTROL: an nl site's note names no second nl list and the en morphology still does not run there
+  const nl = run(voiceFx("nl-own", NL_ON_EN, { lang: "nl" }));
+  expect("[3] GREEN CONTROL: under nl the note names the hype list alone beside the arm, and the list runs once",
+    notes(nl, 'voice arm=nl from <html lang="nl"> in src/routes/__root.tsx (primary subtag), plus the hype list;') &&
+    lineOf(nl, "voice arm=").includes("matches: nl 2, hype 0"), lineOf(nl, "voice arm="));
+  // NEGATIVE CONTROL: with the also-list emptied, which is main before this run, the plant reads PASS
+  const m = mutant("no-also", 'const VOICE_ALSO = { en: ["nl"] };', "const VOICE_ALSO = {};");
+  expect("the no-also-list mutant finds its anchor once", m.anchored);
+  const mout = run(voiceFx("nl-on-en-mutant", NL_ON_EN), { verify: m.path });
+  expect("[3] NEGATIVE CONTROL: with the nl list not run on an en site, its Dutch superlatives read PASS", passes(mout, "no superlative candidates"), candLine(mout));
 }
 if (voiceNotRun.length) console.log(`  NOT RUN (typescript is not installed here; npm ci installs it): ${voiceNotRun.join(" | ")}`);
 
@@ -1541,6 +1640,8 @@ console.log("the recovered syntax errors F6, the absent lang F7, each arm's own 
 console.log("And brief siteseed-emdash (C19 [3]'s em-dash half: leading-zero and semicolon-less entities, and U+2015,");
 console.log("U+2E3A, U+2E3B, U+FE31 and U+FE58 literal and as entities).");
 console.log("And brief siteseed-voice-json (C20 [3] reads the string values of src/content/*.json in both halves, Factory backlog row 1897).");
+console.log("And brief site-seed-voice-and-readme (C21 [3] reads JSON at any depth under src/content N107, the Dutch hype words'");
+console.log("-e forms N076, four English -est copy words on the stop-list N077, the nl list on an en site N078).");
 console.log("The sections that predate them are NOT covered.");
 if (fail) { console.log("SELF-TEST FAIL"); process.exitCode = 1; }
 else console.log("SELF-TEST PASS");

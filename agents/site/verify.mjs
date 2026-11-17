@@ -1341,14 +1341,16 @@ function aaMatrix(T, TA, { ok, bad, soft, note }) {
 // these. A FAIL names the forms it found, since a lookalike is hard to see in an editor.
 out.push("\n[3] VOICE -- zero prose em-dashes (literal + entity); superlatives flagged");
 const copyFiles = [...walk(P.content, [".tsx", ".ts"]), ...walk(P.routes, [".tsx", ".ts"]), ...walk(P.spineDir, [".tsx", ".ts"])];
-// AND THE STRING VALUES OF src/content/*.json, read as copy by both halves (Factory backlog row
-// 1897). aismith-site #95 moved 14 literals out of site.config.tsx into src/content/legal-controller.json
-// and every one of them left this section, whose corpus was *.tsx and *.ts alone. A JSON file holds
-// no markup and no code, so its copy is its string values at any depth; its keys are lookups and
-// are not read. The top level of src/content only, as the row names it. A file that does not parse
-// is read as its comment-stripped text, as a source file is without a parser, and a note names it.
-const copyJson = existsSync(P.content)
-  ? readdirSync(P.content).filter((e) => e.endsWith(".json")).map((e) => join(P.content, e)).filter((p) => statSync(p).isFile()) : [];
+// AND THE STRING VALUES OF EVERY *.json UNDER src/content, read as copy by both halves (Factory
+// backlog row 1897). aismith-site #95 moved 14 literals out of site.config.tsx into
+// src/content/legal-controller.json and every one of them left this section, whose corpus was *.tsx
+// and *.ts alone. A JSON file holds no markup and no code, so its copy is its string values at any
+// depth; its keys are lookups and are not read. A file that does not parse is read as its
+// comment-stripped text, as a source file is without a parser, and a note names it.
+// AT ANY DEPTH OF src/content, by the same walk() the *.tsx and *.ts corpus takes (Factory backlog
+// N107): this read took the top level alone, so aismith-site's five JSON files under
+// src/content/hub/, 460 strings of rendered copy, went unread.
+const copyJson = walk(P.content, [".json"]);
 const jsonCopy = new Map(), jsonUnparsed = [];
 let jsonStrings = 0;
 for (const f of copyJson) {
@@ -1392,25 +1394,55 @@ else ok("no em-dashes in rendered copy (U+2014 and its five lookalikes, literal 
 //     has none, the arm reads the comment-stripped body as before and says so in a note. It never
 //     fails. The string values of src/content/*.json are copy as they stand, parser or none.
 //   THE LISTS, each CLOSED. English: `-est` morphology plus four irregulars, minus a stop-list of
-//     the eight non-superlatives measured in the two English corpora. Dutch: the superlative forms
+//     the eight non-superlatives measured in the two English corpora and four copy words measured
+//     after them (below). Dutch: the superlative forms
 //     measured in the two Dutch corpora, `aller...ste`, and the analytic `meest <adjective>`, while
 //     ordinals, adjectival `-ste` and the quantifier `meeste` stay out (morphology was measured 60
 //     percent wrong on Dutch). Hype: the old list's non-superlative words plus `prachtig` and
 //     `hartverwarmend`, run whatever the arm, because copy says AMAZING in any language.
+//   THE DUTCH LIST ALSO RUNS ON AN `en` SITE (Factory backlog N078, site seed #27's F8). The spine
+//     is bilingual and a site's JSON may hold a Dutch file beside an English one, so an `en` site
+//     carries Dutch copy, and a Dutch superlative there (`beste`) went unreported once the arm was
+//     chosen by register. The list is closed, so English copy cannot match it: measured 2026-11-17
+//     with the corpus below, it reads 0 matches on the seed (`c2286ccb`, 25 Dutch strings, all
+//     in the spine's `chrome.tsx` and `legal.tsx`) and 0 on `aismith-site` (`6a10b904`, 226 Dutch
+//     strings in six files, the spine's two, `src/content/hub/strings.ts`, `hub-film-cues.json` and
+//     the two `*.nl.json` under `src/content/hub/`). The English morphology does not run on an
+//     `nl` site: it is not a list, and Dutch copy is full of `-est` words (`feest`, `leest`).
 //   Every output is review() (S9.5): under-coverage here costs a missed prompt, not a false pass.
 //
 // The old list's three context exclusions carry over unchanged, onto the English arm and the hype
 // list: "as best we reasonably can" is a liability hedge, "best practice(s)", "best effort" and
 // "best of our knowledge" are terms of art, so they are excluded by context rather than by dropping
 // the word, and "the best CRM" still surfaces. The em-dash half above never reads the parse.
-const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest"];
+// THE ENGLISH ARM'S DENOMINATOR (Factory backlog N077, site seed #27's F4). It counts every word
+// ending `-est` plus `best`, `most`, `least` and `worst`, case-folded, less this stop-list, over the
+// copy of the corpus below (the three roots' *.tsx and *.ts as the parse extracts them, and the string
+// values of every *.json under src/content). Measured 2026-11-17 over the fleet's two English
+// corpora, the seed at `c2286ccb` and `aismith-site` at `6a10b904`, with the eight-word list: 18
+// matches, 9 of them superlative forms (`closest` 5, `least` 3 in *at least one*, `Most` 1 as a
+// quantifier) and none a marketing superlative. The other 9 are `getest` 2 and `leest` 3 (Dutch, from
+// `aismith-site`'s `*.nl.json`), and `guest`, `suggest`, `ingest` and the identifier-shaped
+// `onRequest` 1 each, which ruling Q-A of #27's merge keeps as REVIEW noise. The four copy words
+// after the eight are site seed #27's F4 (`guest`, `forest`, `harvest`) and #31's flag 2
+// (`suggest`), each an English word ending `-est` that is no superlative; with them the same corpora
+// read 16 matches, 9 of them the same superlative forms.
+const VOICE_STOP_EN = ["request", "interest", "honest", "test", "digest", "rest", "manifest", "attest",
+  "guest", "forest", "harvest", "suggest"];
 const VOICE_ARMS = {
   en: { re: /(?<!\bas\s)(?<!\p{L})(?:\p{L}+est|best|most|least|worst)(?!\p{L})(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/giu,
         keep: (w) => !VOICE_STOP_EN.includes(w.toLowerCase()) },
   nl: { re: /(?<!\p{L})(?:beste|grootste|mooiste|verste|liefste|leukste|zotste|slimste|schattigste|lelijkste|oudste|jongste|enigste|aller\p{L}+ste|meest\s+\p{L}+)(?!\p{L})/giu,
         keep: () => true },
 };
-const VOICE_HYPE = /(?<!\bas\s)\b(?:uniek|magisch|naadloos|onvergetelijk|wereldklasse|toonaangevend|onge[eë]venaard|revolutionair|prachtig|hartverwarmend|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
+// THE DUTCH HYPE WORDS' INFLECTED FORMS (Factory backlog N076). Each word closes on a word boundary, so
+// an attributive form went unreported (`een unieke sfeer`). Measured 2026-11-17 over the copy of the two
+// Dutch corpora, `zuidgeluid-site` at `8d7883be` and `sz-site` at `92afb27f`, every form of the ten
+// words: `prachtig` 1 and `hartverwarmend` 1 (zuidgeluid-site, both already matched); `uniek` 1,
+// `unieke` 2 and `onvergetelijke` 1 (sz-site, its `feed.snapshot.json`); no other form of any of the
+// ten, and no false positive among those six matches. So each word takes its `-e` form (`naadloos` as
+// `naadloze`), and `wereldklasse`, a noun, takes none.
+const VOICE_HYPE = /(?<!\bas\s)\b(?:unieke?|magische?|naadlo(?:os|ze)|onvergetelijke?|wereldklasse|toonaangevende?|onge[eë]venaarde?|revolutionaire?|prachtige?|hartverwarmende?|leading|premier|world-class|cutting-edge|revolutionary|unique|amazing|incredible|unparalleled|ultimate|seamless|effortless|transformative|unforgettable|magical)\b(?!\s+(?:practices?|effort|of\s+our\s+knowledge))/gi;
 const VOICE_NON_COPY_ATTRS = new Set(["className", "id", "key", "href", "to", "src", "rel", "type", "role", "name"]);
 // [4]'s own expression for the lang __root hard-sets, read the same way, raw. The file holds it
 // three times, here, in [4] and in [4]'s og:locale check, and C18 in verify.selftest.mjs fails
@@ -1457,7 +1489,9 @@ function voiceCopy(ts, file, text) {
   visit(sf);
   return { strings, errors: sf.parseDiagnostics?.length ?? 0 };
 }
-const voiceRun = [...voiceArms, "hype"];
+// The lists an arm also runs beside its own (N078): an `en` site runs the Dutch list too.
+const VOICE_ALSO = { en: ["nl"] };
+const voiceRun = [...new Set([...voiceArms, ...voiceArms.flatMap((a) => VOICE_ALSO[a] ?? []), "hype"])];
 const voiceCount = Object.fromEntries(voiceRun.map((a) => [a, 0]));
 const voiceHits = [], voiceParseErrors = [];
 let voiceStrings = 0;
@@ -1482,11 +1516,11 @@ if (!voiceArms.length) review(`register: no arm for lang=${voiceLang ?? "(none)"
   `chosen by the primary subtag of the <html lang> __root hard-sets, so only the hype list ran`);
 const voiceRoots = [["src/content", P.content], ["src/routes", P.routes], ["src/components/spine", P.spineDir]];
 note(`voice arm=${voiceArms[0] ?? "none"}${voiceLang ? ` from <html lang="${voiceLang}"> in src/routes/__root.tsx (primary subtag)`
-  : `, src/routes/__root.tsx hard-sets no <html lang="..">`}, plus the hype list; ` +
+  : `, src/routes/__root.tsx hard-sets no <html lang="..">`}, plus ${voiceRun.filter((a) => !voiceArms.includes(a) && a !== "hype").map((a) => `the ${a} list and `).join("")}the hype list; ` +
   `extractor: ${voiceTs ? `TypeScript parse (typescript ${voiceTs.version}, ${voiceTsAt}), ${voiceStrings} string(s) extracted` : "comment-stripped source (FALLBACK)"}; ` +
   `corpus: src/content, src/routes and src/components/spine, *.tsx and *.ts, ${copyFiles.length} file(s): ` +
   `${voiceRoots.map(([name, dir]) => `${name} ${copyFiles.filter((f) => f.startsWith(dir + sep)).length}`).join(", ")}, ` +
-  `and the string values of src/content/*.json, ${copyJson.length} file(s), ${jsonStrings} string(s); ` +
+  `and the string values of src/content/**/*.json, ${copyJson.length} file(s), ${jsonStrings} string(s); ` +
   `matches: ${voiceRun.map((a) => `${a} ${voiceCount[a]}`).join(", ")}`);
 if (jsonUnparsed.length) note(`voice corpus: ${jsonUnparsed.join(", ")} did not parse as JSON, so both halves read its ` +
   `comment-stripped text, keys included`);

@@ -19,3 +19,23 @@ control; destination is server-side; honeypot + per-origin rate-limit are built 
 No shared newsletter backbone exists, so newsletter is a **per-site** Supabase Edge Function in
 the site's **own** functions-only Supabase project (AS-owned org, empty of tables), mounted only
 if the site runs a newsletter. Set secrets and deploy into that project:
+
+```bash
+supabase secrets set BREVO_API_KEY=... BREVO_LIST_ID=...   # newsletter
+supabase functions deploy newsletter --no-verify-jwt        # public; CORS locked in-handler
+```
+
+Front end calls it by `fetch`:
+```
+POST https://<site-project-ref>.supabase.co/functions/v1/newsletter
+```
+The front end ships **no** `supabase-js` / DB client — it only `fetch`es the function URL.
+
+## Do NOT
+- Do **not** use classic Netlify Functions (`exports.handler = (event, context) =>`) or the
+  old dual `export default` / `export const onRequestPost` shape — this fleet runs Supabase
+  Edge Functions (`Deno.serve`) only.
+- Do **not** provision tables in any site Supabase project. It is functions-only; a no-db site
+  that grows a data surface fails the audit.
+- Do **not** reproduce or fork the shared `contact` function per site — onboard via the
+  `CONTACT_TENANTS` key instead.
